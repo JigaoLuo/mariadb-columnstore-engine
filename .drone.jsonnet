@@ -4,7 +4,6 @@ local platforms = {
   develop: ['opensuse/leap:15', 'centos:7', 'centos:8', 'rockylinux:8', 'debian:10', 'ubuntu:20.04'],
   'develop-6': ['opensuse/leap:15', 'centos:7', 'centos:8', 'rockylinux:8', 'debian:10', 'ubuntu:20.04'],
   'develop-5': ['opensuse/leap:15', 'centos:7', 'centos:8', 'rockylinux:8', 'debian:10', 'ubuntu:20.04'],
-
 };
 
 local platforms_arm = {
@@ -277,42 +276,28 @@ local Pipeline(branch, platform, event, arch='amd64') = {
   },
   dockerfile:: {
     name: 'dockerfile',
-    image: 'docker:git',
-    volumes: [pipeline._volumes.docker],
+    image: 'alpine/git',
     commands: [
-      'git clone --depth 1 https://github.com/mariadb-corporation/mariadb-community-columnstore-docker.git',
-      'cd mariadb-community-columnstore-docker',
-      'apk add --no-cache patch',
-      'patch Dockerfile ../Dockerfile.patch',
-      'cp ../result/MariaDB-common-10* ../result/MariaDB-client-10* ../result/MariaDB-server-10* ../result/MariaDB-shared-10* ../result/MariaDB-columnstore-engine-10* ./',
+      'git clone --depth 1 https://github.com/mariadb-corporation/mariadb-enterprise-columnstore-docker',
+      "sed -i 's|dlm.mariadb.com/enterprise-release-helpers/mariadb_es_repo_setup|cspkg.s3.amazonaws.com/cs_repo|' mariadb-enterprise-columnstore-docker/Dockerfile",
     ],
   },
-  ecr:: {
-    name: 'ecr',
-    image: 'plugins/ecr',
-    settings: {
-      registry: '866067714787.dkr.ecr.us-east-1.amazonaws.com',
-      repo: 'columnstore/engine',
-      context: 'mariadb-community-columnstore-docker',
-      dockerfile: 'mariadb-community-columnstore-docker/Dockerfile',
-      access_key: {
-        from_secret: 'aws_access_key_id',
-      },
-      secret_key: {
-        from_secret: 'aws_secret_access_key',
-      },
-    },
-  },
-  docker:: {
+  dockerhub:: {
     name: 'docker',
     image: 'plugins/docker',
+    environment: {
+      VERSION: branch,
+    },
     settings: {
-      repo: 'romcheck/columnstore',
-      context: '/drone/src/mariadb-community-columnstore-docker',
-      dockerfile: 'mariadb-community-columnstore-docker/Dockerfile',
-      username: 'romcheck',
+      repo: 'mariadb/enterprise-columnstore-dev',
+      context: 'mariadb-enterprise-columnstore-docker',
+      dockerfile: 'mariadb-enterprise-columnstore-docker/Dockerfile',
+      build_args_from_env: ['VERSION'],
+      username: {
+        from_secret: 'dockerhub_user',
+      },
       password: {
-        from_secret: 'dockerhub_token',
+        from_secret: 'dockerhub_password',
       },
     },
   },
@@ -427,7 +412,7 @@ local Pipeline(branch, platform, event, arch='amd64') = {
          ] +
          [pipeline.publish()] +
          (if (event == 'cron') || (event == 'push') then [pipeline.publish('pkg latest', 'latest')] else []) +
-         // (if (platform == 'centos:8' && event == 'cron') then [pipeline.dockerfile] + [pipeline.docker] + [pipeline.ecr] else []) +
+         (if (platform == 'rockylinux:8') then [pipeline.dockerfile] + [pipeline.dockerhub] else []) +
          [pipeline.smoke] +
          [pipeline.smokelog] +
          (if (std.member(platforms_mtr, platform)) then [pipeline.mtr] + [pipeline.mtrlog] + [pipeline.publish('mtr')] else []) +
