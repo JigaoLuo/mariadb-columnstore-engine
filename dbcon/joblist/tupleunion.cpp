@@ -56,6 +56,840 @@ inline double exp10(double x)
 }  // namespace
 #endif
 
+namespace
+{
+   // union helper functions.
+
+   void normalize_int_int(const Row& in, Row* out, uint32_t i) {
+      if (out->getScale(i) || in.getScale(i)) {
+        int diff = out->getScale(i) - in.getScale(i);
+
+        idbassert(diff >= 0);
+        /*
+            Signed INT to XDecimal
+            TODO:
+            - This code does not handle overflow that may happen on
+              scale multiplication. Instead of returning a garbage value
+              we should probably apply saturation here. In long terms we
+              should implement DECIMAL(65,x) to avoid overflow completely
+              (so the UNION between DECIMAL and integer can choose a proper
+              DECIMAL(M,N) result data type to guarantee that any incoming
+              integer value can fit into it).
+        */
+        if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+        {
+          int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
+          out->setInt128Field(val, i);
+        }
+        else
+        {
+          int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
+          out->setIntField(val, i);
+        }
+      }
+      out->setIntField(in.getIntField(i), i);
+   }
+
+
+  void normalize_int_uint(const Row& in, Row* out, uint32_t i) {
+    if (in.getScale(i)) {
+      int diff = out->getScale(i) - in.getScale(i);
+
+      idbassert(diff >= 0);
+      /*
+          Signed INT to XDecimal
+          TODO:
+          - This code does not handle overflow that may happen on
+            scale multiplication. Instead of returning a garbage value
+            we should probably apply saturation here. In long terms we
+            should implement DECIMAL(65,x) to avoid overflow completely
+            (so the UNION between DECIMAL and integer can choose a proper
+            DECIMAL(M,N) result data type to guarantee that any incoming
+            integer value can fit into it).
+      */
+      if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+      {
+        int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
+        out->setInt128Field(val, i);
+      }
+      else
+      {
+        int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
+        out->setIntField(val, i);
+      }
+    }
+    out->setUintField(in.getUintField(i), i);
+  }
+
+  void normalize_string_string(const Row& in, Row* out, uint32_t i) {
+    out->setStringField(in.getStringField(i), i);
+  }
+
+  void normalize_date_date(const Row& in, Row* out, uint32_t i) {
+    out->setIntField(in.getIntField(i), i);
+  }
+
+  std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> infer_normalize_functions(const Row& in, Row* out)
+  {
+  uint32_t i;
+  std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> result;
+  for (i = 0; i < out->getColumnCount(); i++)
+  {
+    if (in.isNullValue(i))
+    {
+      result.emplace_back();  /// If Null, then add a placeholder in the vector.
+      continue;
+    }
+
+    switch (in.getColTypes()[i])
+    {
+      case CalpontSystemCatalog::TINYINT:
+      case CalpontSystemCatalog::SMALLINT:
+      case CalpontSystemCatalog::MEDINT:
+      case CalpontSystemCatalog::INT:
+      case CalpontSystemCatalog::BIGINT:
+        switch (out->getColTypes()[i])
+        {
+          case CalpontSystemCatalog::TINYINT:
+          case CalpontSystemCatalog::SMALLINT:
+          case CalpontSystemCatalog::MEDINT:
+          case CalpontSystemCatalog::INT:
+          case CalpontSystemCatalog::BIGINT:
+            result.emplace_back(normalize_int_int);
+            break;
+
+          case CalpontSystemCatalog::UTINYINT:
+          case CalpontSystemCatalog::USMALLINT:
+          case CalpontSystemCatalog::UMEDINT:
+          case CalpontSystemCatalog::UINT:
+          case CalpontSystemCatalog::UBIGINT:
+            result.emplace_back(normalize_int_uint);
+            break;
+
+
+          // case CalpontSystemCatalog::CHAR:
+          // case CalpontSystemCatalog::TEXT:
+          // case CalpontSystemCatalog::VARCHAR:
+          // {
+          //   ostringstream os;
+
+          //   if (in.getScale(i))
+          //   {
+          //     double d = in.getIntField(i);
+          //     d /= exp10(in.getScale(i));
+          //     os.precision(15);
+          //     os << d;
+          //   }
+          //   else
+          //     os << in.getIntField(i);
+
+          //   out->setStringField(os.str(), i);
+          //   break;
+          // }
+
+          // case CalpontSystemCatalog::DATE:
+          // case CalpontSystemCatalog::DATETIME:
+          // case CalpontSystemCatalog::TIME:
+          // case CalpontSystemCatalog::TIMESTAMP:
+          //   throw logic_error(
+          //       "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
+
+          // case CalpontSystemCatalog::FLOAT:
+          // case CalpontSystemCatalog::UFLOAT:
+          // {
+          //   auto d = in.getScaledSInt64FieldAsXFloat<double>(i);
+          //   out->setFloatField((float)d, i);
+          //   break;
+          // }
+
+          // case CalpontSystemCatalog::DOUBLE:
+          // case CalpontSystemCatalog::UDOUBLE:
+          // {
+          //   auto d = in.getScaledSInt64FieldAsXFloat<double>(i);
+          //   out->setDoubleField(d, i);
+          //   break;
+          // }
+
+          // case CalpontSystemCatalog::LONGDOUBLE:
+          // {
+          //   auto d = in.getScaledSInt64FieldAsXFloat<long double>(i);
+          //   out->setLongDoubleField(d, i);
+          //   break;
+          // }
+
+          // case CalpontSystemCatalog::DECIMAL:
+          // case CalpontSystemCatalog::UDECIMAL:
+          // {
+          // dec1:
+          //   int diff = out->getScale(i) - in.getScale(i);
+
+          //   idbassert(diff >= 0);
+          //   /*
+          //      Signed INT to XDecimal
+          //      TODO:
+          //      - This code does not handle overflow that may happen on
+          //        scale multiplication. Instead of returning a garbage value
+          //        we should probably apply saturation here. In long terms we
+          //        should implement DECIMAL(65,x) to avoid overflow completely
+          //        (so the UNION between DECIMAL and integer can choose a proper
+          //         DECIMAL(M,N) result data type to guarantee that any incoming
+          //         integer value can fit into it).
+          //   */
+          //   if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+          //   {
+          //     int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
+          //     out->setInt128Field(val, i);
+          //   }
+          //   else
+          //   {
+          //     int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
+          //     out->setIntField(val, i);
+          //   }
+
+          //   break;
+          // }
+
+          default:
+            ostringstream os;
+            os << "TupleUnion::normalize(): tried an illegal conversion: integer to "
+               << out->getColTypes()[i];
+            throw logic_error(os.str());
+        }
+
+        break;
+
+      // case CalpontSystemCatalog::UTINYINT:
+      // case CalpontSystemCatalog::USMALLINT:
+      // case CalpontSystemCatalog::UMEDINT:
+      // case CalpontSystemCatalog::UINT:
+      // case CalpontSystemCatalog::UBIGINT:
+      //   switch (out->getColTypes()[i])
+      //   {
+      //     case CalpontSystemCatalog::TINYINT:
+      //     case CalpontSystemCatalog::SMALLINT:
+      //     case CalpontSystemCatalog::MEDINT:
+      //     case CalpontSystemCatalog::INT:
+      //     case CalpontSystemCatalog::BIGINT:
+      //       if (out->getScale(i))
+      //         goto dec2;
+
+      //       out->setIntField(in.getUintField(i), i);
+      //       break;
+
+      //     case CalpontSystemCatalog::UTINYINT:
+      //     case CalpontSystemCatalog::USMALLINT:
+      //     case CalpontSystemCatalog::UMEDINT:
+      //     case CalpontSystemCatalog::UINT:
+      //     case CalpontSystemCatalog::UBIGINT: out->setUintField(in.getUintField(i), i); break;
+
+      //     case CalpontSystemCatalog::CHAR:
+      //     case CalpontSystemCatalog::TEXT:
+      //     case CalpontSystemCatalog::VARCHAR:
+      //     {
+      //       ostringstream os;
+
+      //       if (in.getScale(i))
+      //       {
+      //         double d = in.getUintField(i);
+      //         d /= exp10(in.getScale(i));
+      //         os.precision(15);
+      //         os << d;
+      //       }
+      //       else
+      //         os << in.getUintField(i);
+
+      //       out->setStringField(os.str(), i);
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::DATE:
+      //     case CalpontSystemCatalog::DATETIME:
+      //     case CalpontSystemCatalog::TIME:
+      //     case CalpontSystemCatalog::TIMESTAMP:
+      //       throw logic_error(
+      //           "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
+
+      //     case CalpontSystemCatalog::FLOAT:
+      //     case CalpontSystemCatalog::UFLOAT:
+      //     {
+      //       auto d = in.getScaledUInt64FieldAsXFloat<double>(i);
+      //       out->setFloatField((float)d, i);
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::DOUBLE:
+      //     case CalpontSystemCatalog::UDOUBLE:
+      //     {
+      //       auto d = in.getScaledUInt64FieldAsXFloat<double>(i);
+      //       out->setDoubleField(d, i);
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::LONGDOUBLE:
+      //     {
+      //       auto d = in.getScaledUInt64FieldAsXFloat<long double>(i);
+      //       out->setLongDoubleField(d, i);
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::DECIMAL:
+      //     case CalpontSystemCatalog::UDECIMAL:
+      //     {
+      //     dec2:
+      //       int diff = out->getScale(i) - in.getScale(i);
+
+      //       idbassert(diff >= 0);
+      //       /*
+      //         Unsigned INT to XDecimal
+      //         TODO:
+      //         - The overflow problem mentioned in the code under label "dec1:" is
+      //           also applicable here.
+      //       */
+      //       if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+      //       {
+      //         int128_t val = datatypes::applySignedScale<int128_t>(in.getUintField(i), diff);
+      //         out->setInt128Field(val, i);
+      //       }
+      //       else
+      //       {
+      //         uint64_t val = datatypes::applySignedScale<uint64_t>(in.getUintField(i), diff);
+      //         out->setUintField(val, i);
+      //       }
+
+      //       break;
+      //     }
+
+      //     default:
+      //       ostringstream os;
+      //       os << "TupleUnion::normalize(): tried an illegal conversion: integer to "
+      //          << out->getColTypes()[i];
+      //       throw logic_error(os.str());
+      //   }
+
+      //   break;
+
+      case CalpontSystemCatalog::CHAR:
+      case CalpontSystemCatalog::TEXT:
+      case CalpontSystemCatalog::VARCHAR:
+        switch (out->getColTypes()[i])
+        {
+          case CalpontSystemCatalog::CHAR:
+          case CalpontSystemCatalog::TEXT:
+          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalize_string_string); break;
+
+          default:
+          {
+            ostringstream os;
+            os << "TupleUnion::normalize(): tried an illegal conversion: string to " << out->getColTypes()[i];
+            throw logic_error(os.str());
+          }
+        }
+
+        break;
+
+      case CalpontSystemCatalog::DATE:
+        switch (out->getColTypes()[i])
+        {
+          case CalpontSystemCatalog::DATE: result.emplace_back(normalize_date_date); break;
+
+          // case CalpontSystemCatalog::DATETIME:
+          // {
+          //   uint64_t date = in.getUintField(i);
+          //   date &= ~0x3f;  // zero the 'spare' field
+          //   date <<= 32;
+          //   out->setUintField(date, i);
+          //   break;
+          // }
+
+          // case CalpontSystemCatalog::TIMESTAMP:
+          // {
+          //   dataconvert::Date date(in.getUintField(i));
+          //   dataconvert::MySQLTime m_time;
+          //   m_time.year = date.year;
+          //   m_time.month = date.month;
+          //   m_time.day = date.day;
+          //   m_time.hour = 0;
+          //   m_time.minute = 0;
+          //   m_time.second = 0;
+          //   m_time.second_part = 0;
+
+          //   dataconvert::TimeStamp timeStamp;
+          //   bool isValid = true;
+          //   int64_t seconds = dataconvert::mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
+
+          //   if (!isValid)
+          //   {
+          //     timeStamp.reset();
+          //   }
+          //   else
+          //   {
+          //     timeStamp.second = seconds;
+          //     timeStamp.msecond = m_time.second_part;
+          //   }
+
+          //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
+          //   out->setUintField(outValue, i);
+          //   break;
+          // }
+
+          // case CalpontSystemCatalog::CHAR:
+          // case CalpontSystemCatalog::TEXT:
+          // case CalpontSystemCatalog::VARCHAR:
+          // {
+          //   string d = DataConvert::dateToString(in.getUintField(i));
+          //   out->setStringField(d, i);
+          //   break;
+          // }
+
+          default:
+          {
+            ostringstream os;
+            os << "TupleUnion::normalize(): tried an illegal conversion: date to " << out->getColTypes()[i];
+            throw logic_error(os.str());
+          }
+        }
+
+        break;
+
+      // case CalpontSystemCatalog::DATETIME:
+      //   switch (out->getColTypes()[i])
+      //   {
+      //     case CalpontSystemCatalog::DATETIME: out->setIntField(in.getIntField(i), i); break;
+
+      //     case CalpontSystemCatalog::DATE:
+      //     {
+      //       uint64_t val = in.getUintField(i);
+      //       val >>= 32;
+      //       out->setUintField(val, i);
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::TIMESTAMP:
+      //     {
+      //       uint64_t val = in.getUintField(i);
+      //       dataconvert::DateTime dtime(val);
+      //       dataconvert::MySQLTime m_time;
+      //       dataconvert::TimeStamp timeStamp;
+
+      //       m_time.year = dtime.year;
+      //       m_time.month = dtime.month;
+      //       m_time.day = dtime.day;
+      //       m_time.hour = dtime.hour;
+      //       m_time.minute = dtime.minute;
+      //       m_time.second = dtime.second;
+      //       m_time.second_part = dtime.msecond;
+
+      //       bool isValid = true;
+      //       int64_t seconds = mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
+
+      //       if (!isValid)
+      //       {
+      //         timeStamp.reset();
+      //       }
+      //       else
+      //       {
+      //         timeStamp.second = seconds;
+      //         timeStamp.msecond = m_time.second_part;
+      //       }
+
+      //       uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
+      //       out->setUintField(outValue, i);
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::CHAR:
+      //     case CalpontSystemCatalog::TEXT:
+      //     case CalpontSystemCatalog::VARCHAR:
+      //     {
+      //       string d = DataConvert::datetimeToString(in.getUintField(i));
+      //       out->setStringField(d, i);
+      //       break;
+      //     }
+
+      //     default:
+      //     {
+      //       ostringstream os;
+      //       os << "TupleUnion::normalize(): tried an illegal conversion: datetime to "
+      //          << out->getColTypes()[i];
+      //       throw logic_error(os.str());
+      //     }
+      //   }
+
+      //   break;
+
+      // case CalpontSystemCatalog::TIMESTAMP:
+      //   switch (out->getColTypes()[i])
+      //   {
+      //     case CalpontSystemCatalog::TIMESTAMP: out->setIntField(in.getIntField(i), i); break;
+
+      //     case CalpontSystemCatalog::DATE:
+      //     case CalpontSystemCatalog::DATETIME:
+      //     {
+      //       uint64_t val = in.getUintField(i);
+      //       dataconvert::TimeStamp timestamp(val);
+      //       int64_t seconds = timestamp.second;
+      //       uint64_t outValue;
+
+      //       dataconvert::MySQLTime time;
+      //       dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
+
+      //       if (out->getColTypes()[i] == CalpontSystemCatalog::DATE)
+      //       {
+      //         dataconvert::Date date;
+      //         date.year = time.year;
+      //         date.month = time.month;
+      //         date.day = time.day;
+      //         date.spare = 0;
+      //         outValue = (uint32_t) * (reinterpret_cast<uint32_t*>(&date));
+      //       }
+      //       else
+      //       {
+      //         dataconvert::DateTime datetime;
+      //         datetime.year = time.year;
+      //         datetime.month = time.month;
+      //         datetime.day = time.day;
+      //         datetime.hour = time.hour;
+      //         datetime.minute = time.minute;
+      //         datetime.second = time.second;
+      //         datetime.msecond = timestamp.msecond;
+      //         outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&datetime));
+      //       }
+
+      //       out->setUintField(outValue, i);
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::CHAR:
+      //     case CalpontSystemCatalog::TEXT:
+      //     case CalpontSystemCatalog::VARCHAR:
+      //     {
+      //       string d = DataConvert::timestampToString(in.getUintField(i), fTimeZone);
+      //       out->setStringField(d, i);
+      //       break;
+      //     }
+
+      //     default:
+      //     {
+      //       ostringstream os;
+      //       os << "TupleUnion::normalize(): tried an illegal conversion: timestamp to "
+      //          << out->getColTypes()[i];
+      //       throw logic_error(os.str());
+      //     }
+      //   }
+
+      //   break;
+
+      // case CalpontSystemCatalog::TIME:
+      //   switch (out->getColTypes()[i])
+      //   {
+      //     case CalpontSystemCatalog::TIME: out->setIntField(in.getIntField(i), i); break;
+
+      //     case CalpontSystemCatalog::CHAR:
+      //     case CalpontSystemCatalog::TEXT:
+      //     case CalpontSystemCatalog::VARCHAR:
+      //     {
+      //       string d = DataConvert::timeToString(in.getIntField(i));
+      //       out->setStringField(d, i);
+      //       break;
+      //     }
+
+      //     default:
+      //     {
+      //       ostringstream os;
+      //       os << "TupleUnion::normalize(): tried an illegal conversion: time to " << out->getColTypes()[i];
+      //       throw logic_error(os.str());
+      //     }
+      //   }
+
+      //   break;
+
+      // case CalpontSystemCatalog::FLOAT:
+      // case CalpontSystemCatalog::UFLOAT:
+      // case CalpontSystemCatalog::DOUBLE:
+      // case CalpontSystemCatalog::UDOUBLE:
+      // {
+      //   double val =
+      //       (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
+
+      //   switch (out->getColTypes()[i])
+      //   {
+      //     case CalpontSystemCatalog::TINYINT:
+      //     case CalpontSystemCatalog::SMALLINT:
+      //     case CalpontSystemCatalog::MEDINT:
+      //     case CalpontSystemCatalog::INT:
+      //     case CalpontSystemCatalog::BIGINT:
+      //       if (out->getScale(i))
+      //         goto dec3;
+
+      //       out->setIntField((int64_t)val, i);
+      //       break;
+
+      //     case CalpontSystemCatalog::UTINYINT:
+      //     case CalpontSystemCatalog::USMALLINT:
+      //     case CalpontSystemCatalog::UMEDINT:
+      //     case CalpontSystemCatalog::UINT:
+      //     case CalpontSystemCatalog::UBIGINT: out->setUintField((uint64_t)val, i); break;
+
+      //     case CalpontSystemCatalog::FLOAT:
+      //     case CalpontSystemCatalog::UFLOAT: out->setFloatField(val, i); break;
+
+      //     case CalpontSystemCatalog::DOUBLE:
+      //     case CalpontSystemCatalog::UDOUBLE: out->setDoubleField(val, i); break;
+
+      //     case CalpontSystemCatalog::LONGDOUBLE: out->setLongDoubleField(val, i); break;
+
+      //     case CalpontSystemCatalog::CHAR:
+      //     case CalpontSystemCatalog::TEXT:
+      //     case CalpontSystemCatalog::VARCHAR:
+      //     {
+      //       ostringstream os;
+      //       os.precision(15);  // to match mysql's output
+      //       os << val;
+      //       out->setStringField(os.str(), i);
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::DECIMAL:
+      //     case CalpontSystemCatalog::UDECIMAL:
+      //     {
+      //     dec3: /* have to pick a scale to use for the double. using 5... */
+      //       uint32_t scale = 5;
+      //       uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+      //       int diff = out->getScale(i) - scale;
+      //       // xFLOAT or xDOUBLE to xDECIMAL conversion. Is it really possible?
+      //       // TODO:
+      //       // Perhaps we should add an assert here that this combination is not possible
+      //       // In the current reduction all problems mentioned in the code under
+      //       //  label "dec1:" are also applicable here.
+      //       // TODO: isn't overflow possible below?
+      //       ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+
+      //       if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+      //         out->setInt128Field(ival, i);
+      //       else
+      //         out->setIntField(ival, i);
+
+      //       break;
+      //     }
+
+      //     default:
+      //       ostringstream os;
+      //       os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
+      //          << out->getColTypes()[i];
+      //       throw logic_error(os.str());
+      //   }
+
+      //   break;
+      // }
+
+      // case CalpontSystemCatalog::LONGDOUBLE:
+      // {
+      //   long double val = in.getLongDoubleField(i);
+
+      //   switch (out->getColTypes()[i])
+      //   {
+      //     case CalpontSystemCatalog::TINYINT:
+      //     case CalpontSystemCatalog::SMALLINT:
+      //     case CalpontSystemCatalog::MEDINT:
+      //     case CalpontSystemCatalog::INT:
+      //     case CalpontSystemCatalog::BIGINT:
+      //       if (out->getScale(i))
+      //         goto dec4;
+
+      //       out->setIntField((int64_t)val, i);
+      //       break;
+
+      //     case CalpontSystemCatalog::UTINYINT:
+      //     case CalpontSystemCatalog::USMALLINT:
+      //     case CalpontSystemCatalog::UMEDINT:
+      //     case CalpontSystemCatalog::UINT:
+      //     case CalpontSystemCatalog::UBIGINT: out->setUintField((uint64_t)val, i); break;
+
+      //     case CalpontSystemCatalog::FLOAT:
+      //     case CalpontSystemCatalog::UFLOAT: out->setFloatField(val, i); break;
+
+      //     case CalpontSystemCatalog::DOUBLE:
+      //     case CalpontSystemCatalog::UDOUBLE: out->setDoubleField(val, i); break;
+
+      //     case CalpontSystemCatalog::LONGDOUBLE: out->setLongDoubleField(val, i); break;
+
+      //     case CalpontSystemCatalog::CHAR:
+      //     case CalpontSystemCatalog::TEXT:
+      //     case CalpontSystemCatalog::VARCHAR:
+      //     {
+      //       ostringstream os;
+      //       os.precision(15);  // to match mysql's output
+      //       os << val;
+      //       out->setStringField(os.str(), i);
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::DECIMAL:
+      //     case CalpontSystemCatalog::UDECIMAL:
+      //     {
+      //     dec4: /* have to pick a scale to use for the double. using 5... */
+      //       uint32_t scale = 5;
+      //       uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+      //       int diff = out->getScale(i) - scale;
+
+      //       // LONGDOUBLE to xDECIMAL conversions: is it really possible?
+      //       // TODO:
+      //       // Perhaps we should add an assert here that this combination is not possible
+      //       // In the current reduction all problems mentioned in the code under
+      //       //  label "dec1:" are also applicable here.
+      //       ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+
+      //       if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+      //         out->setInt128Field(ival, i);
+      //       else
+      //         out->setIntField(ival, i);
+
+      //       break;
+      //     }
+
+      //     default:
+      //       ostringstream os;
+      //       os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
+      //          << out->getColTypes()[i];
+      //       throw logic_error(os.str());
+      //   }
+
+      //   break;
+      // }
+
+      // case CalpontSystemCatalog::DECIMAL:
+      // case CalpontSystemCatalog::UDECIMAL:
+      // {
+      //   int64_t val = 0;
+      //   int128_t val128 = 0;
+      //   bool isInputWide = false;
+
+      //   if (in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+      //   {
+      //     in.getInt128Field(i, val128);
+      //     isInputWide = true;
+      //   }
+      //   else
+      //     val = in.getIntField(i);
+
+      //   uint32_t scale = in.getScale(i);
+
+      //   switch (out->getColTypes()[i])
+      //   {
+      //     case CalpontSystemCatalog::TINYINT:
+      //     case CalpontSystemCatalog::SMALLINT:
+      //     case CalpontSystemCatalog::MEDINT:
+      //     case CalpontSystemCatalog::INT:
+      //     case CalpontSystemCatalog::BIGINT:
+      //     case CalpontSystemCatalog::UTINYINT:
+      //     case CalpontSystemCatalog::USMALLINT:
+      //     case CalpontSystemCatalog::UMEDINT:
+      //     case CalpontSystemCatalog::UINT:
+      //     case CalpontSystemCatalog::UBIGINT:
+      //     case CalpontSystemCatalog::DECIMAL:
+      //     case CalpontSystemCatalog::UDECIMAL:
+      //     {
+      //       if (datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)))
+      //       {
+      //         if (out->getScale(i) == scale)
+      //           out->setInt128Field(isInputWide ? val128 : val, i);
+      //         else if (out->getScale(i) > scale)
+      //         {
+      //           int128_t temp = datatypes::applySignedScale<int128_t>(isInputWide ? val128 : val,
+      //                                                                 out->getScale(i) - scale);
+      //           out->setInt128Field(temp, i);
+      //         }
+      //         else  // should not happen, the output's scale is the largest
+      //           throw logic_error("TupleUnion::normalize(): incorrect scale setting");
+      //       }
+      //       // If output type is narrow decimal, input type
+      //       // has to be narrow decimal as well.
+      //       else
+      //       {
+      //         if (out->getScale(i) == scale)
+      //           out->setIntField(val, i);
+      //         else if (out->getScale(i) > scale)
+      //         {
+      //           int64_t temp = datatypes::applySignedScale<int64_t>(val, out->getScale(i) - scale);
+      //           out->setIntField(temp, i);
+      //         }
+      //         else  // should not happen, the output's scale is the largest
+      //           throw logic_error("TupleUnion::normalize(): incorrect scale setting");
+      //       }
+
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::FLOAT:
+      //     case CalpontSystemCatalog::UFLOAT:
+      //     {
+      //       float fval = ((float)val) / IDB_pow[scale];
+      //       out->setFloatField(fval, i);
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::DOUBLE:
+      //     case CalpontSystemCatalog::UDOUBLE:
+      //     {
+      //       double dval = ((double)val) / IDB_pow[scale];
+      //       out->setDoubleField(dval, i);
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::LONGDOUBLE:
+      //     {
+      //       long double dval = ((long double)val) / IDB_pow[scale];
+      //       out->setLongDoubleField(dval, i);
+      //       break;
+      //     }
+
+      //     case CalpontSystemCatalog::CHAR:
+      //     case CalpontSystemCatalog::TEXT:
+      //     case CalpontSystemCatalog::VARCHAR:
+      //     default:
+      //     {
+      //       if (LIKELY(isInputWide))
+      //       {
+      //         datatypes::Decimal dec(0, in.getScale(i), in.getPrecision(i), val128);
+      //         out->setStringField(dec.toString(), i);
+      //       }
+      //       else
+      //       {
+      //         datatypes::Decimal dec(val, in.getScale(i), in.getPrecision(i));
+      //         out->setStringField(dec.toString(), i);
+      //       }
+      //       break;
+      //     }
+      //   }
+
+      //   break;
+      // }
+
+      // case CalpontSystemCatalog::BLOB:
+      // case CalpontSystemCatalog::VARBINARY:
+      // {
+      //   // out->setVarBinaryField(in.getVarBinaryStringField(i), i);  // not efficient
+      //   out->setVarBinaryField(in.getVarBinaryField(i), in.getVarBinaryLength(i), i);
+      //   break;
+      // }
+
+      default:
+      {
+        ostringstream os;
+        os << "TupleUnion::normalize(): unknown input type (" << in.getColTypes()[i] << ")";
+        cout << os.str() << endl;
+        throw logic_error(os.str());
+      }
+    }
+  }
+
+  idbassert(out->getColumnCount() == result.size());
+  return result;
+}
+
+
+}  // namespace
+
 namespace joblist
 {
 inline uint64_t TupleUnion::Hasher::operator()(const RowPosition& p) const
@@ -218,8 +1052,9 @@ void TupleUnion::readInput(uint32_t which)
         l_tmpRG.getRow(0, &tmpRow);
         l_tmpRG.setRowCount(l_inputRG.getRowCount());
 
+        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalize_functions =  infer_normalize_functions(inRow, &tmpRow);
         for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow(), tmpRow.nextRow())
-          normalize(inRow, &tmpRow);
+          normalize(inRow, &outRow, normalize_functions);
 
         l_tmpRG.getRow(0, &tmpRow);
         {
@@ -262,9 +1097,10 @@ void TupleUnion::readInput(uint32_t which)
       }
       else
       {
+        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalize_functions =  infer_normalize_functions(inRow, &outRow);
         for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow())
         {
-          normalize(inRow, &outRow);
+          normalize(inRow, &outRow, normalize_functions);
           addToOutput(&outRow, &l_outputRG, false, outRGData);
         }
       }
@@ -399,765 +1235,24 @@ void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit, RGData& data)
   }
 }
 
-void TupleUnion::normalize(const Row& in, Row* out)
+
+void TupleUnion::normalize(const Row& in, Row* out, std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>>& infer_normalize_functions)
 {
   uint32_t i;
 
   out->setRid(0);
+  idbassert(out->getColumnCount() == infer_normalize_functions.size());
 
   for (i = 0; i < out->getColumnCount(); i++)
   {
     if (in.isNullValue(i))
     {
-      writeNull(out, i);
+      TupleUnion::writeNull(out, i);
       continue;
     }
 
-    switch (in.getColTypes()[i])
-    {
-      case CalpontSystemCatalog::TINYINT:
-      case CalpontSystemCatalog::SMALLINT:
-      case CalpontSystemCatalog::MEDINT:
-      case CalpontSystemCatalog::INT:
-      case CalpontSystemCatalog::BIGINT:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::TINYINT:
-          case CalpontSystemCatalog::SMALLINT:
-          case CalpontSystemCatalog::MEDINT:
-          case CalpontSystemCatalog::INT:
-          case CalpontSystemCatalog::BIGINT:
-            if (out->getScale(i) || in.getScale(i))
-              goto dec1;
-
-            out->setIntField(in.getIntField(i), i);
-            break;
-
-          case CalpontSystemCatalog::UTINYINT:
-          case CalpontSystemCatalog::USMALLINT:
-          case CalpontSystemCatalog::UMEDINT:
-          case CalpontSystemCatalog::UINT:
-          case CalpontSystemCatalog::UBIGINT:
-            if (in.getScale(i))
-              goto dec1;
-
-            out->setUintField(in.getUintField(i), i);
-            break;
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR:
-          {
-            ostringstream os;
-
-            if (in.getScale(i))
-            {
-              double d = in.getIntField(i);
-              d /= exp10(in.getScale(i));
-              os.precision(15);
-              os << d;
-            }
-            else
-              os << in.getIntField(i);
-
-            out->setStringField(os.str(), i);
-            break;
-          }
-
-          case CalpontSystemCatalog::DATE:
-          case CalpontSystemCatalog::DATETIME:
-          case CalpontSystemCatalog::TIME:
-          case CalpontSystemCatalog::TIMESTAMP:
-            throw logic_error(
-                "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
-
-          case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT:
-          {
-            auto d = in.getScaledSInt64FieldAsXFloat<double>(i);
-            out->setFloatField((float)d, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE:
-          {
-            auto d = in.getScaledSInt64FieldAsXFloat<double>(i);
-            out->setDoubleField(d, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::LONGDOUBLE:
-          {
-            auto d = in.getScaledSInt64FieldAsXFloat<long double>(i);
-            out->setLongDoubleField(d, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::DECIMAL:
-          case CalpontSystemCatalog::UDECIMAL:
-          {
-          dec1:
-            int diff = out->getScale(i) - in.getScale(i);
-
-            idbassert(diff >= 0);
-            /*
-               Signed INT to XDecimal
-               TODO:
-               - This code does not handle overflow that may happen on
-                 scale multiplication. Instead of returning a garbage value
-                 we should probably apply saturation here. In long terms we
-                 should implement DECIMAL(65,x) to avoid overflow completely
-                 (so the UNION between DECIMAL and integer can choose a proper
-                  DECIMAL(M,N) result data type to guarantee that any incoming
-                  integer value can fit into it).
-            */
-            if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-            {
-              int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
-              out->setInt128Field(val, i);
-            }
-            else
-            {
-              int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
-              out->setIntField(val, i);
-            }
-
-            break;
-          }
-
-          default:
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: integer to "
-               << out->getColTypes()[i];
-            throw logic_error(os.str());
-        }
-
-        break;
-
-      case CalpontSystemCatalog::UTINYINT:
-      case CalpontSystemCatalog::USMALLINT:
-      case CalpontSystemCatalog::UMEDINT:
-      case CalpontSystemCatalog::UINT:
-      case CalpontSystemCatalog::UBIGINT:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::TINYINT:
-          case CalpontSystemCatalog::SMALLINT:
-          case CalpontSystemCatalog::MEDINT:
-          case CalpontSystemCatalog::INT:
-          case CalpontSystemCatalog::BIGINT:
-            if (out->getScale(i))
-              goto dec2;
-
-            out->setIntField(in.getUintField(i), i);
-            break;
-
-          case CalpontSystemCatalog::UTINYINT:
-          case CalpontSystemCatalog::USMALLINT:
-          case CalpontSystemCatalog::UMEDINT:
-          case CalpontSystemCatalog::UINT:
-          case CalpontSystemCatalog::UBIGINT: out->setUintField(in.getUintField(i), i); break;
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR:
-          {
-            ostringstream os;
-
-            if (in.getScale(i))
-            {
-              double d = in.getUintField(i);
-              d /= exp10(in.getScale(i));
-              os.precision(15);
-              os << d;
-            }
-            else
-              os << in.getUintField(i);
-
-            out->setStringField(os.str(), i);
-            break;
-          }
-
-          case CalpontSystemCatalog::DATE:
-          case CalpontSystemCatalog::DATETIME:
-          case CalpontSystemCatalog::TIME:
-          case CalpontSystemCatalog::TIMESTAMP:
-            throw logic_error(
-                "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
-
-          case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT:
-          {
-            auto d = in.getScaledUInt64FieldAsXFloat<double>(i);
-            out->setFloatField((float)d, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE:
-          {
-            auto d = in.getScaledUInt64FieldAsXFloat<double>(i);
-            out->setDoubleField(d, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::LONGDOUBLE:
-          {
-            auto d = in.getScaledUInt64FieldAsXFloat<long double>(i);
-            out->setLongDoubleField(d, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::DECIMAL:
-          case CalpontSystemCatalog::UDECIMAL:
-          {
-          dec2:
-            int diff = out->getScale(i) - in.getScale(i);
-
-            idbassert(diff >= 0);
-            /*
-              Unsigned INT to XDecimal
-              TODO:
-              - The overflow problem mentioned in the code under label "dec1:" is
-                also applicable here.
-            */
-            if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-            {
-              int128_t val = datatypes::applySignedScale<int128_t>(in.getUintField(i), diff);
-              out->setInt128Field(val, i);
-            }
-            else
-            {
-              uint64_t val = datatypes::applySignedScale<uint64_t>(in.getUintField(i), diff);
-              out->setUintField(val, i);
-            }
-
-            break;
-          }
-
-          default:
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: integer to "
-               << out->getColTypes()[i];
-            throw logic_error(os.str());
-        }
-
-        break;
-
-      case CalpontSystemCatalog::CHAR:
-      case CalpontSystemCatalog::TEXT:
-      case CalpontSystemCatalog::VARCHAR:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR: out->setStringField(in.getStringField(i), i); break;
-
-          default:
-          {
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: string to " << out->getColTypes()[i];
-            throw logic_error(os.str());
-          }
-        }
-
-        break;
-
-      case CalpontSystemCatalog::DATE:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::DATE: out->setIntField(in.getIntField(i), i); break;
-
-          case CalpontSystemCatalog::DATETIME:
-          {
-            uint64_t date = in.getUintField(i);
-            date &= ~0x3f;  // zero the 'spare' field
-            date <<= 32;
-            out->setUintField(date, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::TIMESTAMP:
-          {
-            dataconvert::Date date(in.getUintField(i));
-            dataconvert::MySQLTime m_time;
-            m_time.year = date.year;
-            m_time.month = date.month;
-            m_time.day = date.day;
-            m_time.hour = 0;
-            m_time.minute = 0;
-            m_time.second = 0;
-            m_time.second_part = 0;
-
-            dataconvert::TimeStamp timeStamp;
-            bool isValid = true;
-            int64_t seconds = dataconvert::mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
-
-            if (!isValid)
-            {
-              timeStamp.reset();
-            }
-            else
-            {
-              timeStamp.second = seconds;
-              timeStamp.msecond = m_time.second_part;
-            }
-
-            uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
-            out->setUintField(outValue, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR:
-          {
-            string d = DataConvert::dateToString(in.getUintField(i));
-            out->setStringField(d, i);
-            break;
-          }
-
-          default:
-          {
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: date to " << out->getColTypes()[i];
-            throw logic_error(os.str());
-          }
-        }
-
-        break;
-
-      case CalpontSystemCatalog::DATETIME:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::DATETIME: out->setIntField(in.getIntField(i), i); break;
-
-          case CalpontSystemCatalog::DATE:
-          {
-            uint64_t val = in.getUintField(i);
-            val >>= 32;
-            out->setUintField(val, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::TIMESTAMP:
-          {
-            uint64_t val = in.getUintField(i);
-            dataconvert::DateTime dtime(val);
-            dataconvert::MySQLTime m_time;
-            dataconvert::TimeStamp timeStamp;
-
-            m_time.year = dtime.year;
-            m_time.month = dtime.month;
-            m_time.day = dtime.day;
-            m_time.hour = dtime.hour;
-            m_time.minute = dtime.minute;
-            m_time.second = dtime.second;
-            m_time.second_part = dtime.msecond;
-
-            bool isValid = true;
-            int64_t seconds = mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
-
-            if (!isValid)
-            {
-              timeStamp.reset();
-            }
-            else
-            {
-              timeStamp.second = seconds;
-              timeStamp.msecond = m_time.second_part;
-            }
-
-            uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
-            out->setUintField(outValue, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR:
-          {
-            string d = DataConvert::datetimeToString(in.getUintField(i));
-            out->setStringField(d, i);
-            break;
-          }
-
-          default:
-          {
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: datetime to "
-               << out->getColTypes()[i];
-            throw logic_error(os.str());
-          }
-        }
-
-        break;
-
-      case CalpontSystemCatalog::TIMESTAMP:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::TIMESTAMP: out->setIntField(in.getIntField(i), i); break;
-
-          case CalpontSystemCatalog::DATE:
-          case CalpontSystemCatalog::DATETIME:
-          {
-            uint64_t val = in.getUintField(i);
-            dataconvert::TimeStamp timestamp(val);
-            int64_t seconds = timestamp.second;
-            uint64_t outValue;
-
-            dataconvert::MySQLTime time;
-            dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
-
-            if (out->getColTypes()[i] == CalpontSystemCatalog::DATE)
-            {
-              dataconvert::Date date;
-              date.year = time.year;
-              date.month = time.month;
-              date.day = time.day;
-              date.spare = 0;
-              outValue = (uint32_t) * (reinterpret_cast<uint32_t*>(&date));
-            }
-            else
-            {
-              dataconvert::DateTime datetime;
-              datetime.year = time.year;
-              datetime.month = time.month;
-              datetime.day = time.day;
-              datetime.hour = time.hour;
-              datetime.minute = time.minute;
-              datetime.second = time.second;
-              datetime.msecond = timestamp.msecond;
-              outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&datetime));
-            }
-
-            out->setUintField(outValue, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR:
-          {
-            string d = DataConvert::timestampToString(in.getUintField(i), fTimeZone);
-            out->setStringField(d, i);
-            break;
-          }
-
-          default:
-          {
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: timestamp to "
-               << out->getColTypes()[i];
-            throw logic_error(os.str());
-          }
-        }
-
-        break;
-
-      case CalpontSystemCatalog::TIME:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::TIME: out->setIntField(in.getIntField(i), i); break;
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR:
-          {
-            string d = DataConvert::timeToString(in.getIntField(i));
-            out->setStringField(d, i);
-            break;
-          }
-
-          default:
-          {
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: time to " << out->getColTypes()[i];
-            throw logic_error(os.str());
-          }
-        }
-
-        break;
-
-      case CalpontSystemCatalog::FLOAT:
-      case CalpontSystemCatalog::UFLOAT:
-      case CalpontSystemCatalog::DOUBLE:
-      case CalpontSystemCatalog::UDOUBLE:
-      {
-        double val =
-            (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
-
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::TINYINT:
-          case CalpontSystemCatalog::SMALLINT:
-          case CalpontSystemCatalog::MEDINT:
-          case CalpontSystemCatalog::INT:
-          case CalpontSystemCatalog::BIGINT:
-            if (out->getScale(i))
-              goto dec3;
-
-            out->setIntField((int64_t)val, i);
-            break;
-
-          case CalpontSystemCatalog::UTINYINT:
-          case CalpontSystemCatalog::USMALLINT:
-          case CalpontSystemCatalog::UMEDINT:
-          case CalpontSystemCatalog::UINT:
-          case CalpontSystemCatalog::UBIGINT: out->setUintField((uint64_t)val, i); break;
-
-          case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT: out->setFloatField(val, i); break;
-
-          case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE: out->setDoubleField(val, i); break;
-
-          case CalpontSystemCatalog::LONGDOUBLE: out->setLongDoubleField(val, i); break;
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR:
-          {
-            ostringstream os;
-            os.precision(15);  // to match mysql's output
-            os << val;
-            out->setStringField(os.str(), i);
-            break;
-          }
-
-          case CalpontSystemCatalog::DECIMAL:
-          case CalpontSystemCatalog::UDECIMAL:
-          {
-          dec3: /* have to pick a scale to use for the double. using 5... */
-            uint32_t scale = 5;
-            uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-            int diff = out->getScale(i) - scale;
-            // xFLOAT or xDOUBLE to xDECIMAL conversion. Is it really possible?
-            // TODO:
-            // Perhaps we should add an assert here that this combination is not possible
-            // In the current reduction all problems mentioned in the code under
-            //  label "dec1:" are also applicable here.
-            // TODO: isn't overflow possible below?
-            ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-
-            if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-              out->setInt128Field(ival, i);
-            else
-              out->setIntField(ival, i);
-
-            break;
-          }
-
-          default:
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
-               << out->getColTypes()[i];
-            throw logic_error(os.str());
-        }
-
-        break;
-      }
-
-      case CalpontSystemCatalog::LONGDOUBLE:
-      {
-        long double val = in.getLongDoubleField(i);
-
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::TINYINT:
-          case CalpontSystemCatalog::SMALLINT:
-          case CalpontSystemCatalog::MEDINT:
-          case CalpontSystemCatalog::INT:
-          case CalpontSystemCatalog::BIGINT:
-            if (out->getScale(i))
-              goto dec4;
-
-            out->setIntField((int64_t)val, i);
-            break;
-
-          case CalpontSystemCatalog::UTINYINT:
-          case CalpontSystemCatalog::USMALLINT:
-          case CalpontSystemCatalog::UMEDINT:
-          case CalpontSystemCatalog::UINT:
-          case CalpontSystemCatalog::UBIGINT: out->setUintField((uint64_t)val, i); break;
-
-          case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT: out->setFloatField(val, i); break;
-
-          case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE: out->setDoubleField(val, i); break;
-
-          case CalpontSystemCatalog::LONGDOUBLE: out->setLongDoubleField(val, i); break;
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR:
-          {
-            ostringstream os;
-            os.precision(15);  // to match mysql's output
-            os << val;
-            out->setStringField(os.str(), i);
-            break;
-          }
-
-          case CalpontSystemCatalog::DECIMAL:
-          case CalpontSystemCatalog::UDECIMAL:
-          {
-          dec4: /* have to pick a scale to use for the double. using 5... */
-            uint32_t scale = 5;
-            uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-            int diff = out->getScale(i) - scale;
-
-            // LONGDOUBLE to xDECIMAL conversions: is it really possible?
-            // TODO:
-            // Perhaps we should add an assert here that this combination is not possible
-            // In the current reduction all problems mentioned in the code under
-            //  label "dec1:" are also applicable here.
-            ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-
-            if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-              out->setInt128Field(ival, i);
-            else
-              out->setIntField(ival, i);
-
-            break;
-          }
-
-          default:
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
-               << out->getColTypes()[i];
-            throw logic_error(os.str());
-        }
-
-        break;
-      }
-
-      case CalpontSystemCatalog::DECIMAL:
-      case CalpontSystemCatalog::UDECIMAL:
-      {
-        int64_t val = 0;
-        int128_t val128 = 0;
-        bool isInputWide = false;
-
-        if (in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-        {
-          in.getInt128Field(i, val128);
-          isInputWide = true;
-        }
-        else
-          val = in.getIntField(i);
-
-        uint32_t scale = in.getScale(i);
-
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::TINYINT:
-          case CalpontSystemCatalog::SMALLINT:
-          case CalpontSystemCatalog::MEDINT:
-          case CalpontSystemCatalog::INT:
-          case CalpontSystemCatalog::BIGINT:
-          case CalpontSystemCatalog::UTINYINT:
-          case CalpontSystemCatalog::USMALLINT:
-          case CalpontSystemCatalog::UMEDINT:
-          case CalpontSystemCatalog::UINT:
-          case CalpontSystemCatalog::UBIGINT:
-          case CalpontSystemCatalog::DECIMAL:
-          case CalpontSystemCatalog::UDECIMAL:
-          {
-            if (datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)))
-            {
-              if (out->getScale(i) == scale)
-                out->setInt128Field(isInputWide ? val128 : val, i);
-              else if (out->getScale(i) > scale)
-              {
-                int128_t temp = datatypes::applySignedScale<int128_t>(isInputWide ? val128 : val,
-                                                                      out->getScale(i) - scale);
-                out->setInt128Field(temp, i);
-              }
-              else  // should not happen, the output's scale is the largest
-                throw logic_error("TupleUnion::normalize(): incorrect scale setting");
-            }
-            // If output type is narrow decimal, input type
-            // has to be narrow decimal as well.
-            else
-            {
-              if (out->getScale(i) == scale)
-                out->setIntField(val, i);
-              else if (out->getScale(i) > scale)
-              {
-                int64_t temp = datatypes::applySignedScale<int64_t>(val, out->getScale(i) - scale);
-                out->setIntField(temp, i);
-              }
-              else  // should not happen, the output's scale is the largest
-                throw logic_error("TupleUnion::normalize(): incorrect scale setting");
-            }
-
-            break;
-          }
-
-          case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT:
-          {
-            float fval = ((float)val) / IDB_pow[scale];
-            out->setFloatField(fval, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE:
-          {
-            double dval = ((double)val) / IDB_pow[scale];
-            out->setDoubleField(dval, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::LONGDOUBLE:
-          {
-            long double dval = ((long double)val) / IDB_pow[scale];
-            out->setLongDoubleField(dval, i);
-            break;
-          }
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR:
-          default:
-          {
-            if (LIKELY(isInputWide))
-            {
-              datatypes::Decimal dec(0, in.getScale(i), in.getPrecision(i), val128);
-              out->setStringField(dec.toString(), i);
-            }
-            else
-            {
-              datatypes::Decimal dec(val, in.getScale(i), in.getPrecision(i));
-              out->setStringField(dec.toString(), i);
-            }
-            break;
-          }
-        }
-
-        break;
-      }
-
-      case CalpontSystemCatalog::BLOB:
-      case CalpontSystemCatalog::VARBINARY:
-      {
-        // out->setVarBinaryField(in.getVarBinaryStringField(i), i);  // not efficient
-        out->setVarBinaryField(in.getVarBinaryField(i), in.getVarBinaryLength(i), i);
-        break;
-      }
-
-      default:
-      {
-        ostringstream os;
-        os << "TupleUnion::normalize(): unknown input type (" << in.getColTypes()[i] << ")";
-        cout << os.str() << endl;
-        throw logic_error(os.str());
-      }
-    }
+    /// Call the pre-compiled function.
+    infer_normalize_functions[i](in, out, i);
   }
 }
 
