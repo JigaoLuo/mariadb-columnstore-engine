@@ -1054,7 +1054,7 @@ void TupleUnion::readInput(uint32_t which)
 
         std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalize_functions =  infer_normalize_functions(inRow, &tmpRow);
         for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow(), tmpRow.nextRow())
-          normalize(inRow, &outRow, normalize_functions);
+          normalize(inRow, &tmpRow, normalize_functions);
 
         l_tmpRG.getRow(0, &tmpRow);
         {
