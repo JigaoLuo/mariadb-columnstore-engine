@@ -60,7 +60,8 @@ namespace
 {
    // union helper functions.
 
-   void normalize_int_int(const Row& in, Row* out, uint32_t i) {
+   void normalize_int_int(const Row& in, Row* out, uint32_t i) 
+   {
       if (out->getScale(i) || in.getScale(i)) {
         int diff = out->getScale(i) - in.getScale(i);
 
@@ -86,12 +87,14 @@ namespace
           int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
           out->setIntField(val, i);
         }
+      } else {
+        out->setIntField(in.getIntField(i), i);
       }
-      out->setIntField(in.getIntField(i), i);
    }
 
 
-  void normalize_int_uint(const Row& in, Row* out, uint32_t i) {
+  void normalize_int_uint(const Row& in, Row* out, uint32_t i) 
+  {
     if (in.getScale(i)) {
       int diff = out->getScale(i) - in.getScale(i);
 
@@ -117,15 +120,18 @@ namespace
         int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
         out->setIntField(val, i);
       }
+    } else {
+      out->setUintField(in.getUintField(i), i);
     }
-    out->setUintField(in.getUintField(i), i);
   }
 
-  void normalize_string_string(const Row& in, Row* out, uint32_t i) {
+  void normalize_string_string(const Row& in, Row* out, uint32_t i) 
+  {
     out->setStringField(in.getStringField(i), i);
   }
 
-  void normalize_date_date(const Row& in, Row* out, uint32_t i) {
+  void normalize_date_date(const Row& in, Row* out, uint32_t i) 
+  {
     out->setIntField(in.getIntField(i), i);
   }
 
