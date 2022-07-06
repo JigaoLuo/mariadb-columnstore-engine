@@ -60,7 +60,7 @@ namespace
 {
    // union helper functions.
 
-   void normalize_int_int(const Row& in, Row* out, uint32_t i) 
+   void normalizeIntToInt(const Row& in, Row* out, uint32_t i) 
    {
       if (out->getScale(i) || in.getScale(i)) {
         int diff = out->getScale(i) - in.getScale(i);
@@ -95,7 +95,7 @@ namespace
    }
 
 
-  void normalize_int_uint(const Row& in, Row* out, uint32_t i) 
+  void normalizeIntToUint(const Row& in, Row* out, uint32_t i) 
   {
     if (in.getScale(i)) {
       int diff = out->getScale(i) - in.getScale(i);
@@ -129,17 +129,17 @@ namespace
     }
   }
 
-  void normalize_string_string(const Row& in, Row* out, uint32_t i) 
+  void normalizeStringToString(const Row& in, Row* out, uint32_t i) 
   {
     out->setStringField(in.getStringField(i), i);
   }
 
-  void normalize_date_date(const Row& in, Row* out, uint32_t i) 
+  void normalizeDateToDate(const Row& in, Row* out, uint32_t i) 
   {
     out->setIntField(in.getIntField(i), i);
   }
 
-  std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> infer_normalize_functions(const Row& in, Row* out)
+  std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> inferNormalizeFunctions(const Row& in, Row* out)
   {
   uint32_t i;
   std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> result;
@@ -165,7 +165,7 @@ namespace
           case CalpontSystemCatalog::MEDINT:
           case CalpontSystemCatalog::INT:
           case CalpontSystemCatalog::BIGINT:
-            result.emplace_back(normalize_int_int);
+            result.emplace_back(normalizeIntToInt);
             break;
 
           case CalpontSystemCatalog::UTINYINT:
@@ -173,7 +173,7 @@ namespace
           case CalpontSystemCatalog::UMEDINT:
           case CalpontSystemCatalog::UINT:
           case CalpontSystemCatalog::UBIGINT:
-            result.emplace_back(normalize_int_uint);
+            result.emplace_back(normalizeIntToUint);
             break;
 
 
@@ -385,7 +385,7 @@ namespace
         {
           case CalpontSystemCatalog::CHAR:
           case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalize_string_string); break;
+          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeStringToString); break;
 
           default:
           {
@@ -400,7 +400,7 @@ namespace
       case CalpontSystemCatalog::DATE:
         switch (out->getColTypes()[i])
         {
-          case CalpontSystemCatalog::DATE: result.emplace_back(normalize_date_date); break;
+          case CalpontSystemCatalog::DATE: result.emplace_back(normalizeDateToDate); break;
 
           // case CalpontSystemCatalog::DATETIME:
           // {
@@ -1062,9 +1062,9 @@ void TupleUnion::readInput(uint32_t which)
         l_tmpRG.getRow(0, &tmpRow);
         l_tmpRG.setRowCount(l_inputRG.getRowCount());
 
-        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalize_functions =  infer_normalize_functions(inRow, &tmpRow);
+        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions =  inferNormalizeFunctions(inRow, &tmpRow);
         for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow(), tmpRow.nextRow())
-          normalize(inRow, &tmpRow, normalize_functions);
+          normalize(inRow, &tmpRow, normalizeFunctions);
 
         l_tmpRG.getRow(0, &tmpRow);
         {
@@ -1107,10 +1107,10 @@ void TupleUnion::readInput(uint32_t which)
       }
       else
       {
-        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalize_functions =  infer_normalize_functions(inRow, &outRow);
+        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions =  inferNormalizeFunctions(inRow, &outRow);
         for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow())
         {
-          normalize(inRow, &outRow, normalize_functions);
+          normalize(inRow, &outRow, normalizeFunctions);
           addToOutput(&outRow, &l_outputRG, false, outRGData);
         }
       }
@@ -1246,12 +1246,12 @@ void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit, RGData& data)
 }
 
 
-void TupleUnion::normalize(const Row& in, Row* out, std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>>& infer_normalize_functions)
+void TupleUnion::normalize(const Row& in, Row* out, std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>>& normalizeFunctions)
 {
   uint32_t i;
 
   out->setRid(0);
-  idbassert(out->getColumnCount() == infer_normalize_functions.size());
+  idbassert(out->getColumnCount() == normalizeFunctions.size());
 
   for (i = 0; i < out->getColumnCount(); i++)
   {
@@ -1262,7 +1262,7 @@ void TupleUnion::normalize(const Row& in, Row* out, std::vector<std::function<vo
     }
 
     /// Call the pre-compiled function.
-    infer_normalize_functions[i](in, out, i);
+    normalizeFunctions[i](in, out, i);
   }
 }
 
