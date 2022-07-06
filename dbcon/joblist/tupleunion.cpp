@@ -87,7 +87,9 @@ namespace
           int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
           out->setIntField(val, i);
         }
-      } else {
+      } 
+      else 
+      {
         out->setIntField(in.getIntField(i), i);
       }
    }
@@ -120,7 +122,9 @@ namespace
         int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
         out->setIntField(val, i);
       }
-    } else {
+    } 
+    else 
+    {
       out->setUintField(in.getUintField(i), i);
     }
   }
