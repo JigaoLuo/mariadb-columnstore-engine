@@ -1251,7 +1251,6 @@ void TupleUnion::normalize(const Row& in, Row* out, std::vector<std::function<vo
   uint32_t i;
 
   out->setRid(0);
-  idbassert(out->getColumnCount() == normalizeFunctions.size());
 
   for (i = 0; i < out->getColumnCount(); i++)
   {
