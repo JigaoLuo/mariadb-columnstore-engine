@@ -58,42 +58,54 @@ inline double exp10(double x)
 
 namespace
 {
-   // union helper functions.
+  // union helper functions.
 
-   void normalizeIntToInt(const Row& in, Row* out, uint32_t i) 
-   {
-      if (out->getScale(i) || in.getScale(i)) {
-        int diff = out->getScale(i) - in.getScale(i);
+  void normalizeIntToIntNoScale(const Row& in, Row* out, uint32_t i) 
+  {
+    out->setIntField(in.getIntField(i), i); 
+  }
 
-        idbassert(diff >= 0);
-        /*
-            Signed INT to XDecimal
-            TODO:
-            - This code does not handle overflow that may happen on
-              scale multiplication. Instead of returning a garbage value
-              we should probably apply saturation here. In long terms we
-              should implement DECIMAL(65,x) to avoid overflow completely
-              (so the UNION between DECIMAL and integer can choose a proper
-              DECIMAL(M,N) result data type to guarantee that any incoming
-              integer value can fit into it).
-        */
-        if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-        {
-          int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
-          out->setInt128Field(val, i);
-        }
-        else
-        {
-          int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
-          out->setIntField(val, i);
-        }
-      } 
-      else 
-      {
-        out->setIntField(in.getIntField(i), i);
-      }
-   }
+  void normalizeIntToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  {
+    const int diff = out->getScale(i) - in.getScale(i);
+    idbassert(diff >= 0);
+    /*
+        Signed INT to XDecimal
+        TODO:
+        - This code does not handle overflow that may happen on
+          scale multiplication. Instead of returning a garbage value
+          we should probably apply saturation here. In long terms we
+          should implement DECIMAL(65,x) to avoid overflow completely
+          (so the UNION between DECIMAL and integer can choose a proper
+          DECIMAL(M,N) result data type to guarantee that any incoming
+          integer value can fit into it).
+    */
 
+    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
+    int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
+    out->setInt128Field(val, i);
+  }
+
+  void normalizeIntToIntWithScaleInt64(const Row& in, Row* out, uint32_t i) 
+  {
+    const int diff = out->getScale(i) - in.getScale(i);
+    idbassert(diff >= 0);
+    /*
+        Signed INT to XDecimal
+        TODO:
+        - This code does not handle overflow that may happen on
+          scale multiplication. Instead of returning a garbage value
+          we should probably apply saturation here. In long terms we
+          should implement DECIMAL(65,x) to avoid overflow completely
+          (so the UNION between DECIMAL and integer can choose a proper
+          DECIMAL(M,N) result data type to guarantee that any incoming
+          integer value can fit into it).
+    */
+
+    idbassert(out->getColumnWidth(i) < datatypes::MAXDECIMALWIDTH);
+    int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
+    out->setIntField(val, i);
+  }
 
   void normalizeIntToUint(const Row& in, Row* out, uint32_t i) 
   {
@@ -127,6 +139,53 @@ namespace
     {
       out->setUintField(in.getUintField(i), i);
     }
+  }
+
+  void normalizeIntToUintNoScale(const Row& in, Row* out, uint32_t i) 
+  {
+    out->setIntField(in.getIntField(i), i); 
+  }
+
+  void normalizeIntToUintWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  {
+    const int diff = out->getScale(i) - in.getScale(i);
+    idbassert(diff >= 0);
+    /*
+        Signed INT to XDecimal
+        TODO:
+        - This code does not handle overflow that may happen on
+          scale multiplication. Instead of returning a garbage value
+          we should probably apply saturation here. In long terms we
+          should implement DECIMAL(65,x) to avoid overflow completely
+          (so the UNION between DECIMAL and integer can choose a proper
+          DECIMAL(M,N) result data type to guarantee that any incoming
+          integer value can fit into it).
+    */
+
+    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
+    int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
+    out->setInt128Field(val, i);
+  }
+
+  void normalizeIntToUintWithScaleInt64(const Row& in, Row* out, uint32_t i) 
+  {
+    const int diff = out->getScale(i) - in.getScale(i);
+    idbassert(diff >= 0);
+    /*
+        Signed INT to XDecimal
+        TODO:
+        - This code does not handle overflow that may happen on
+          scale multiplication. Instead of returning a garbage value
+          we should probably apply saturation here. In long terms we
+          should implement DECIMAL(65,x) to avoid overflow completely
+          (so the UNION between DECIMAL and integer can choose a proper
+          DECIMAL(M,N) result data type to guarantee that any incoming
+          integer value can fit into it).
+    */
+
+    idbassert(out->getColumnWidth(i) < datatypes::MAXDECIMALWIDTH);
+    int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
+    out->setIntField(val, i);
   }
 
   void normalizeStringToString(const Row& in, Row* out, uint32_t i) 
@@ -165,7 +224,15 @@ namespace
           case CalpontSystemCatalog::MEDINT:
           case CalpontSystemCatalog::INT:
           case CalpontSystemCatalog::BIGINT:
-            result.emplace_back(normalizeIntToInt);
+            if (out->getScale(i) || in.getScale(i)) 
+            {
+              if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+                result.emplace_back(normalizeIntToIntWithScaleInt128);
+              else
+                result.emplace_back(normalizeIntToIntWithScaleInt64);
+            } 
+            else
+              result.emplace_back(normalizeIntToIntNoScale); 
             break;
 
           case CalpontSystemCatalog::UTINYINT:
@@ -173,7 +240,15 @@ namespace
           case CalpontSystemCatalog::UMEDINT:
           case CalpontSystemCatalog::UINT:
           case CalpontSystemCatalog::UBIGINT:
-            result.emplace_back(normalizeIntToUint);
+            if (in.getScale(i))
+            {
+              if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+                result.emplace_back(normalizeIntToUintWithScaleInt128);
+              else
+                result.emplace_back(normalizeIntToUintWithScaleInt64);
+            } 
+            else
+              result.emplace_back(normalizeIntToUintNoScale); 
             break;
 
 
@@ -1062,7 +1137,7 @@ void TupleUnion::readInput(uint32_t which)
         l_tmpRG.getRow(0, &tmpRow);
         l_tmpRG.setRowCount(l_inputRG.getRowCount());
 
-        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions =  inferNormalizeFunctions(inRow, &tmpRow);
+        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &tmpRow);
         for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow(), tmpRow.nextRow())
           normalize(inRow, &tmpRow, normalizeFunctions);
 
@@ -1107,7 +1182,7 @@ void TupleUnion::readInput(uint32_t which)
       }
       else
       {
-        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions =  inferNormalizeFunctions(inRow, &outRow);
+        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &outRow);
         for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow())
         {
           normalize(inRow, &outRow, normalizeFunctions);
