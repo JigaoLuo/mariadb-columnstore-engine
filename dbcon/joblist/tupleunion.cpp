@@ -106,41 +106,7 @@ namespace
     int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
     out->setIntField(val, i);
   }
-
-  void normalizeIntToUint(const Row& in, Row* out, uint32_t i) 
-  {
-    if (in.getScale(i)) {
-      int diff = out->getScale(i) - in.getScale(i);
-
-      idbassert(diff >= 0);
-      /*
-          Signed INT to XDecimal
-          TODO:
-          - This code does not handle overflow that may happen on
-            scale multiplication. Instead of returning a garbage value
-            we should probably apply saturation here. In long terms we
-            should implement DECIMAL(65,x) to avoid overflow completely
-            (so the UNION between DECIMAL and integer can choose a proper
-            DECIMAL(M,N) result data type to guarantee that any incoming
-            integer value can fit into it).
-      */
-      if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-      {
-        int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
-        out->setInt128Field(val, i);
-      }
-      else
-      {
-        int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
-        out->setIntField(val, i);
-      }
-    } 
-    else 
-    {
-      out->setUintField(in.getUintField(i), i);
-    }
-  }
-
+  
   void normalizeIntToUintNoScale(const Row& in, Row* out, uint32_t i) 
   {
     out->setIntField(in.getIntField(i), i); 
