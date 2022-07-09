@@ -1124,7 +1124,8 @@ void TupleUnion::readInput(uint32_t which)
               const_cast<RowPosition&>(*(inserted.first)) =
                   RowPosition(rowMemory.size() - 1, l_outputRG.getRowCount());
               memDiff += outRow.getRealSize();
-              addToOutput(&outRow, &l_outputRG, true, outRGData);
+              uint32_t tmpRowCount = 0;
+              addToOutput(&outRow, &l_outputRG, true, outRGData, tmpRowCount);
             }
           }
 
@@ -1149,11 +1150,17 @@ void TupleUnion::readInput(uint32_t which)
       else
       {
         std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &outRow);
-        for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow())
+        const uint32_t inputRGRowCount = l_inputRG.getRowCount();
+        uint32_t tmpRowCount = l_outputRG.getRowCount();
+
+        for (uint32_t i = 0; i < inputRGRowCount; i++, inRow.nextRow())
         {
           normalize(inRow, &outRow, normalizeFunctions);
-          addToOutput(&outRow, &l_outputRG, false, outRGData);
+          addToOutput(&outRow, &l_outputRG, false, outRGData, tmpRowCount);
         }
+
+        fRowsReturned += inputRGRowCount;
+        l_outputRG.setRowCount(tmpRowCount);
       }
 
       more = dl->next(it, &inRGData);
@@ -1264,14 +1271,14 @@ void TupleUnion::getOutput(RowGroup* rg, Row* row, RGData* data)
   rg->getRow(rg->getRowCount(), row);
 }
 
-void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit, RGData& data)
+void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit, RGData& data, uint32_t& tmpRowCount)
 {
   r->nextRow();
-  rg->incRowCount();
-  fRowsReturned++;
+  tmpRowCount++;
 
-  if (rg->getRowCount() == 8192)
+  if (UNLIKELY(tmpRowCount == 8192))
   {
+    rg->setRowCount(8192);
     {
       boost::mutex::scoped_lock lock(sMutex);
       output->insert(data);
@@ -1280,12 +1287,12 @@ void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit, RGData& data)
     rg->setData(&data);
     rg->resetRowGroup(0);
     rg->getRow(0, r);
+    tmpRowCount = 0;
 
     if (keepit)
       rowMemory.push_back(data);
   }
 }
-
 
 void TupleUnion::normalize(const Row& in, Row* out, std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>>& normalizeFunctions)
 {
