@@ -122,7 +122,7 @@ class TupleUnion : public JobStep, public TupleDeliveryStep
   };
 
   void getOutput(rowgroup::RowGroup* rg, rowgroup::Row* row, rowgroup::RGData* data);
-  void addToOutput(rowgroup::Row* r, rowgroup::RowGroup* rg, bool keepit, rowgroup::RGData& data, uint32_t& tmpRowCount);
+  void addToOutput(rowgroup::Row* r, rowgroup::RowGroup* rg, bool keepit, rowgroup::RGData& data, uint32_t& tmpOutputRowCount);
   void normalize(const rowgroup::Row& in, rowgroup::Row* out, std::vector<std::function<void(const rowgroup::Row& in, rowgroup::Row* out, uint32_t col)>>& infer_normalize_functions);
   void writeNull(rowgroup::Row* out, uint32_t col);
   void readInput(uint32_t);

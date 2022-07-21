@@ -1113,7 +1113,9 @@ void TupleUnion::readInput(uint32_t which)
           getOutput(&l_outputRG, &outRow, &outRGData);
           memUsageBefore = allocator.getMemUsage();
 
-          for (uint32_t i = 0; i < l_tmpRG.getRowCount(); i++, tmpRow.nextRow())
+          const uint32_t tmpRGRowCount = l_tmpRG.getRowCount();
+          uint32_t tmpOutputRowCount = l_outputRG.getRowCount();
+          for (uint32_t i = 0; i < tmpRGRowCount; i++, tmpRow.nextRow())
           {
             pair<Uniquer_t::iterator, bool> inserted;
             inserted = uniquer->insert(RowPosition(which | RowPosition::normalizedFlag, i));
@@ -1124,10 +1126,12 @@ void TupleUnion::readInput(uint32_t which)
               const_cast<RowPosition&>(*(inserted.first)) =
                   RowPosition(rowMemory.size() - 1, l_outputRG.getRowCount());
               memDiff += outRow.getRealSize();
-              uint32_t tmpRowCount = 0;
-              addToOutput(&outRow, &l_outputRG, true, outRGData, tmpRowCount);
+              addToOutput(&outRow, &l_outputRG, true, outRGData, tmpOutputRowCount);
             }
           }
+
+          fRowsReturned += tmpRGRowCount;
+          l_outputRG.setRowCount(tmpOutputRowCount);
 
           memUsageAfter = allocator.getMemUsage();
           memDiff += (memUsageAfter - memUsageBefore);
@@ -1151,16 +1155,16 @@ void TupleUnion::readInput(uint32_t which)
       {
         std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &outRow);
         const uint32_t inputRGRowCount = l_inputRG.getRowCount();
-        uint32_t tmpRowCount = l_outputRG.getRowCount();
+        uint32_t tmpOutputRowCount = l_outputRG.getRowCount();
 
         for (uint32_t i = 0; i < inputRGRowCount; i++, inRow.nextRow())
         {
           normalize(inRow, &outRow, normalizeFunctions);
-          addToOutput(&outRow, &l_outputRG, false, outRGData, tmpRowCount);
+          addToOutput(&outRow, &l_outputRG, false, outRGData, tmpOutputRowCount);
         }
 
         fRowsReturned += inputRGRowCount;
-        l_outputRG.setRowCount(tmpRowCount);
+        l_outputRG.setRowCount(tmpOutputRowCount);
       }
 
       more = dl->next(it, &inRGData);
@@ -1271,12 +1275,12 @@ void TupleUnion::getOutput(RowGroup* rg, Row* row, RGData* data)
   rg->getRow(rg->getRowCount(), row);
 }
 
-void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit, RGData& data, uint32_t& tmpRowCount)
+void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit, RGData& data, uint32_t& tmpOutputRowCount)
 {
   r->nextRow();
-  tmpRowCount++;
+  tmpOutputRowCount++;
 
-  if (UNLIKELY(tmpRowCount == 8192))
+  if (UNLIKELY(tmpOutputRowCount == 8192))
   {
     rg->setRowCount(8192);
     {
@@ -1287,7 +1291,7 @@ void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit, RGData& data, ui
     rg->setData(&data);
     rg->resetRowGroup(0);
     rg->getRow(0, r);
-    tmpRowCount = 0;
+    tmpOutputRowCount = 0;
 
     if (keepit)
       rowMemory.push_back(data);
