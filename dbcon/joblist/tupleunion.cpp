@@ -106,6 +106,59 @@ namespace
     out->setIntField(val, i);
   }
 
+  void normalizeIntToString(const Row& in, Row* out, uint32_t i) 
+  {
+    ostringstream os;
+
+    if (in.getScale(i))
+    {
+      double d = in.getIntField(i);
+      d /= exp10(in.getScale(i));
+      os.precision(15);
+      os << d;
+    }
+    else
+      os << in.getIntField(i);
+
+    out->setStringField(os.str(), i);
+  }
+
+  void normalizeIntToXFloat(const Row& in, Row* out, uint32_t i) 
+  {
+    auto d = in.getScaledSInt64FieldAsXFloat<double>(i);
+    out->setFloatField((float)d, i);
+  }
+
+  void normalizeIntToXDouble(const Row& in, Row* out, uint32_t i) 
+  {
+    auto d = in.getScaledSInt64FieldAsXFloat<double>(i);
+    out->setDoubleField(d, i);
+  }
+
+  void normalizeIntToLongDouble(const Row& in, Row* out, uint32_t i) 
+  {
+    auto d = in.getScaledSInt64FieldAsXFloat<long double>(i);
+    out->setLongDoubleField(d, i);
+  }
+
+  void normalizeIntToXDecimalWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  {
+    const int diff = out->getScale(i) - in.getScale(i);
+    idbassert(diff >= 0);
+    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
+    int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
+    out->setInt128Field(val, i);
+  }
+
+  void normalizeIntToXDecimalWithScaleInt64(const Row& in, Row* out, uint32_t i) 
+  {
+    const int diff = out->getScale(i) - in.getScale(i);
+    idbassert(diff >= 0);
+    idbassert(out->getColumnWidth(i) < datatypes::MAXDECIMALWIDTH);
+    int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
+    out->setIntField(val, i);
+  }
+
   void normalizeStringToString(const Row& in, Row* out, uint32_t i) 
   {
     out->setStringField(in.getStringField(i), i);
@@ -142,6 +195,7 @@ namespace
           case CalpontSystemCatalog::MEDINT:
           case CalpontSystemCatalog::INT:
           case CalpontSystemCatalog::BIGINT:
+          {
             if (out->getScale(i) || in.getScale(i)) 
             {
               if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
@@ -152,12 +206,14 @@ namespace
             else
               result.emplace_back(normalizeIntToIntNoScale); 
             break;
+          }
 
           case CalpontSystemCatalog::UTINYINT:
           case CalpontSystemCatalog::USMALLINT:
           case CalpontSystemCatalog::UMEDINT:
           case CalpontSystemCatalog::UINT:
           case CalpontSystemCatalog::UBIGINT:
+          {
             if (in.getScale(i))
             {
               if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
@@ -168,89 +224,63 @@ namespace
             else
               result.emplace_back(normalizeIntToUintNoScale); 
             break;
+          }
 
+          case CalpontSystemCatalog::CHAR:
+          case CalpontSystemCatalog::TEXT:
+          case CalpontSystemCatalog::VARCHAR:
+          {
+            result.emplace_back(normalizeIntToString);
+            break;
+          }
 
-          // case CalpontSystemCatalog::CHAR:
-          // case CalpontSystemCatalog::TEXT:
-          // case CalpontSystemCatalog::VARCHAR:
-          // {
-          //   ostringstream os;
+          case CalpontSystemCatalog::DATE:
+          case CalpontSystemCatalog::DATETIME:
+          case CalpontSystemCatalog::TIME:
+          case CalpontSystemCatalog::TIMESTAMP:
+            throw logic_error(
+                "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
 
-          //   if (in.getScale(i))
-          //   {
-          //     double d = in.getIntField(i);
-          //     d /= exp10(in.getScale(i));
-          //     os.precision(15);
-          //     os << d;
-          //   }
-          //   else
-          //     os << in.getIntField(i);
+          case CalpontSystemCatalog::FLOAT:
+          case CalpontSystemCatalog::UFLOAT:
+          {
+            result.emplace_back(normalizeIntToXFloat);
+            break;
+          }
 
-          //   out->setStringField(os.str(), i);
-          //   break;
-          // }
+          case CalpontSystemCatalog::DOUBLE:
+          case CalpontSystemCatalog::UDOUBLE:
+          {
+            result.emplace_back(normalizeIntToXDouble);
+            break;
+          }
 
-          // case CalpontSystemCatalog::DATE:
-          // case CalpontSystemCatalog::DATETIME:
-          // case CalpontSystemCatalog::TIME:
-          // case CalpontSystemCatalog::TIMESTAMP:
-          //   throw logic_error(
-          //       "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
+          case CalpontSystemCatalog::LONGDOUBLE:
+          {
+            result.emplace_back(normalizeIntToLongDouble);
+            break;
+          }
 
-          // case CalpontSystemCatalog::FLOAT:
-          // case CalpontSystemCatalog::UFLOAT:
-          // {
-          //   auto d = in.getScaledSInt64FieldAsXFloat<double>(i);
-          //   out->setFloatField((float)d, i);
-          //   break;
-          // }
-
-          // case CalpontSystemCatalog::DOUBLE:
-          // case CalpontSystemCatalog::UDOUBLE:
-          // {
-          //   auto d = in.getScaledSInt64FieldAsXFloat<double>(i);
-          //   out->setDoubleField(d, i);
-          //   break;
-          // }
-
-          // case CalpontSystemCatalog::LONGDOUBLE:
-          // {
-          //   auto d = in.getScaledSInt64FieldAsXFloat<long double>(i);
-          //   out->setLongDoubleField(d, i);
-          //   break;
-          // }
-
-          // case CalpontSystemCatalog::DECIMAL:
-          // case CalpontSystemCatalog::UDECIMAL:
-          // {
-          // dec1:
-          //   int diff = out->getScale(i) - in.getScale(i);
-
-          //   idbassert(diff >= 0);
-          //   /*
-          //      Signed INT to XDecimal
-          //      TODO:
-          //      - This code does not handle overflow that may happen on
-          //        scale multiplication. Instead of returning a garbage value
-          //        we should probably apply saturation here. In long terms we
-          //        should implement DECIMAL(65,x) to avoid overflow completely
-          //        (so the UNION between DECIMAL and integer can choose a proper
-          //         DECIMAL(M,N) result data type to guarantee that any incoming
-          //         integer value can fit into it).
-          //   */
-          //   if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-          //   {
-          //     int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
-          //     out->setInt128Field(val, i);
-          //   }
-          //   else
-          //   {
-          //     int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
-          //     out->setIntField(val, i);
-          //   }
-
-          //   break;
-          // }
+          case CalpontSystemCatalog::DECIMAL:
+          case CalpontSystemCatalog::UDECIMAL:
+          {
+            /*
+               Signed INT to XDecimal
+               TODO:
+               - This code does not handle overflow that may happen on
+                 scale multiplication. Instead of returning a garbage value
+                 we should probably apply saturation here. In long terms we
+                 should implement DECIMAL(65,x) to avoid overflow completely
+                 (so the UNION between DECIMAL and integer can choose a proper
+                  DECIMAL(M,N) result data type to guarantee that any incoming
+                  integer value can fit into it).
+            */
+            if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+              result.emplace_back(normalizeIntToXDecimalWithScaleInt128);
+            else
+              result.emplace_back(normalizeIntToXDecimalWithScaleInt64);
+            break;
+          }
 
           default:
             ostringstream os;
@@ -1109,7 +1139,7 @@ void TupleUnion::readInput(uint32_t which)
       else
       {
         std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &outRow);
-        const uint32_t inputRGRowCount = l_inputRG.getRowCount();  TODO: CHANGE THIS LINE
+        const uint32_t inputRGRowCount = l_inputRG.getRowCount();
         uint32_t tmpOutputRowCount = l_outputRG.getRowCount();
 
         for (uint32_t i = 0; i < inputRGRowCount; i++, inRow.nextRow())
