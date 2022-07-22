@@ -69,18 +69,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    /*
-        Signed INT to XDecimal
-        TODO:
-        - This code does not handle overflow that may happen on
-          scale multiplication. Instead of returning a garbage value
-          we should probably apply saturation here. In long terms we
-          should implement DECIMAL(65,x) to avoid overflow completely
-          (so the UNION between DECIMAL and integer can choose a proper
-          DECIMAL(M,N) result data type to guarantee that any incoming
-          integer value can fit into it).
-    */
-
     idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
     int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
     out->setInt128Field(val, i);
@@ -90,18 +78,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    /*
-        Signed INT to XDecimal
-        TODO:
-        - This code does not handle overflow that may happen on
-          scale multiplication. Instead of returning a garbage value
-          we should probably apply saturation here. In long terms we
-          should implement DECIMAL(65,x) to avoid overflow completely
-          (so the UNION between DECIMAL and integer can choose a proper
-          DECIMAL(M,N) result data type to guarantee that any incoming
-          integer value can fit into it).
-    */
-
     idbassert(out->getColumnWidth(i) < datatypes::MAXDECIMALWIDTH);
     int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
     out->setIntField(val, i);
@@ -116,18 +92,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    /*
-        Signed INT to XDecimal
-        TODO:
-        - This code does not handle overflow that may happen on
-          scale multiplication. Instead of returning a garbage value
-          we should probably apply saturation here. In long terms we
-          should implement DECIMAL(65,x) to avoid overflow completely
-          (so the UNION between DECIMAL and integer can choose a proper
-          DECIMAL(M,N) result data type to guarantee that any incoming
-          integer value can fit into it).
-    */
-
     idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
     int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
     out->setInt128Field(val, i);
@@ -137,18 +101,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    /*
-        Signed INT to XDecimal
-        TODO:
-        - This code does not handle overflow that may happen on
-          scale multiplication. Instead of returning a garbage value
-          we should probably apply saturation here. In long terms we
-          should implement DECIMAL(65,x) to avoid overflow completely
-          (so the UNION between DECIMAL and integer can choose a proper
-          DECIMAL(M,N) result data type to guarantee that any incoming
-          integer value can fit into it).
-    */
-
     idbassert(out->getColumnWidth(i) < datatypes::MAXDECIMALWIDTH);
     int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
     out->setIntField(val, i);
@@ -1154,7 +1106,7 @@ void TupleUnion::readInput(uint32_t which)
       else
       {
         std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &outRow);
-        const uint32_t inputRGRowCount = l_inputRG.getRowCount();
+        const uint32_t inputRGRowCount = l_inputRG.getRowCount();  TODO: CHANGE THIS LINE
         uint32_t tmpOutputRowCount = l_outputRG.getRowCount();
 
         for (uint32_t i = 0; i < inputRGRowCount; i++, inRow.nextRow())
