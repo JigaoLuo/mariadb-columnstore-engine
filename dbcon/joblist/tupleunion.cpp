@@ -674,6 +674,12 @@ namespace
     out->setStringField(dec.toString(), i);
   }
 
+  void normalizeBlobVarbinary(const Row& in, Row* out, uint32_t i) 
+  {
+    // out->setVarBinaryField(in.getVarBinaryStringField(i), i);  // not efficient
+    out->setVarBinaryField(in.getVarBinaryField(i), in.getVarBinaryLength(i), i);
+  }
+
   std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> inferNormalizeFunctions(const Row& in, Row* out)
   {
   uint32_t i;
@@ -1276,13 +1282,8 @@ namespace
         break;
       }
 
-      // case CalpontSystemCatalog::BLOB:
-      // case CalpontSystemCatalog::VARBINARY:
-      // {
-      //   // out->setVarBinaryField(in.getVarBinaryStringField(i), i);  // not efficient
-      //   out->setVarBinaryField(in.getVarBinaryField(i), in.getVarBinaryLength(i), i);
-      //   break;
-      // }
+      case CalpontSystemCatalog::BLOB:
+      case CalpontSystemCatalog::VARBINARY: result.emplace_back(normalizeBlobVarbinary); break;
 
       default:
       {
