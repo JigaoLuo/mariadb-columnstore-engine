@@ -390,6 +390,17 @@ namespace
   //   out->setStringField(d, i);
   // }
 
+  void normalizeTimeToTime(const Row& in, Row* out, uint32_t i) 
+  {
+    out->setIntField(in.getIntField(i), i);
+  }
+
+  void normalizeTimeToString(const Row& in, Row* out, uint32_t i) 
+  {
+    string d = DataConvert::timeToString(in.getIntField(i));
+    out->setStringField(d, i);
+  }
+
   std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> inferNormalizeFunctions(const Row& in, Row* out)
   {
   uint32_t i;
@@ -771,29 +782,24 @@ namespace
 
         break;
 
-      // case CalpontSystemCatalog::TIME:
-      //   switch (out->getColTypes()[i])
-      //   {
-      //     case CalpontSystemCatalog::TIME: out->setIntField(in.getIntField(i), i); break;
+      case CalpontSystemCatalog::TIME:
+        switch (out->getColTypes()[i])
+        {
+          case CalpontSystemCatalog::TIME: result.emplace_back(normalizeTimeToTime); break;
 
-      //     case CalpontSystemCatalog::CHAR:
-      //     case CalpontSystemCatalog::TEXT:
-      //     case CalpontSystemCatalog::VARCHAR:
-      //     {
-      //       string d = DataConvert::timeToString(in.getIntField(i));
-      //       out->setStringField(d, i);
-      //       break;
-      //     }
+          case CalpontSystemCatalog::CHAR:
+          case CalpontSystemCatalog::TEXT:
+          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeTimeToString); break;
 
-      //     default:
-      //     {
-      //       ostringstream os;
-      //       os << "TupleUnion::normalize(): tried an illegal conversion: time to " << out->getColTypes()[i];
-      //       throw logic_error(os.str());
-      //     }
-      //   }
+          default:
+          {
+            ostringstream os;
+            os << "TupleUnion::normalize(): tried an illegal conversion: time to " << out->getColTypes()[i];
+            throw logic_error(os.str());
+          }
+        }
 
-      //   break;
+        break;
 
       // case CalpontSystemCatalog::FLOAT:
       // case CalpontSystemCatalog::UFLOAT:
