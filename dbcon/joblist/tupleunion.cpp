@@ -682,408 +682,475 @@ namespace
 
   std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> inferNormalizeFunctions(const Row& in, Row* out)
   {
-  uint32_t i;
-  std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> result;
-  for (i = 0; i < out->getColumnCount(); i++)
-  {
-    if (in.isNullValue(i))
+    uint32_t i;
+    std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> result;
+    for (i = 0; i < out->getColumnCount(); i++)
     {
-      result.emplace_back();  /// If Null, then add a placeholder in the vector.
-      continue;
-    }
+      if (in.isNullValue(i))
+      {
+        result.emplace_back();  /// If Null, then add a placeholder in the vector.
+        continue;
+      }
 
-    switch (in.getColTypes()[i])
-    {
-      case CalpontSystemCatalog::TINYINT:
-      case CalpontSystemCatalog::SMALLINT:
-      case CalpontSystemCatalog::MEDINT:
-      case CalpontSystemCatalog::INT:
-      case CalpontSystemCatalog::BIGINT:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::TINYINT:
-          case CalpontSystemCatalog::SMALLINT:
-          case CalpontSystemCatalog::MEDINT:
-          case CalpontSystemCatalog::INT:
-          case CalpontSystemCatalog::BIGINT:
+      switch (in.getColTypes()[i])
+      {
+        case CalpontSystemCatalog::TINYINT:
+        case CalpontSystemCatalog::SMALLINT:
+        case CalpontSystemCatalog::MEDINT:
+        case CalpontSystemCatalog::INT:
+        case CalpontSystemCatalog::BIGINT:
+          switch (out->getColTypes()[i])
           {
-            if (out->getScale(i) || in.getScale(i)) 
+            case CalpontSystemCatalog::TINYINT:
+            case CalpontSystemCatalog::SMALLINT:
+            case CalpontSystemCatalog::MEDINT:
+            case CalpontSystemCatalog::INT:
+            case CalpontSystemCatalog::BIGINT:
             {
-              if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                result.emplace_back(normalizeIntToIntWithScaleInt128);
+              if (out->getScale(i) || in.getScale(i)) 
+              {
+                if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+                  result.emplace_back(normalizeIntToIntWithScaleInt128);
+                else
+                  result.emplace_back(normalizeIntToIntWithScaleInt64);
+              } 
               else
-                result.emplace_back(normalizeIntToIntWithScaleInt64);
-            } 
-            else
-              result.emplace_back(normalizeIntToIntNoScale); 
-            break;
+                result.emplace_back(normalizeIntToIntNoScale); 
+              break;
+            }
+
+            case CalpontSystemCatalog::UTINYINT:
+            case CalpontSystemCatalog::USMALLINT:
+            case CalpontSystemCatalog::UMEDINT:
+            case CalpontSystemCatalog::UINT:
+            case CalpontSystemCatalog::UBIGINT:
+            {
+              if (in.getScale(i))
+              {
+                if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+                  result.emplace_back(normalizeIntToUintWithScaleInt128);
+                else
+                  result.emplace_back(normalizeIntToUintWithScaleInt64);
+              } 
+              else
+                result.emplace_back(normalizeIntToUintNoScale); 
+              break;
+            }
+
+            case CalpontSystemCatalog::CHAR:
+            case CalpontSystemCatalog::TEXT:
+            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeIntToString); break;
+
+            case CalpontSystemCatalog::DATE:
+            case CalpontSystemCatalog::DATETIME:
+            case CalpontSystemCatalog::TIME:
+            case CalpontSystemCatalog::TIMESTAMP:
+              throw logic_error(
+                  "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
+
+            case CalpontSystemCatalog::FLOAT:
+            case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeIntToXFloat); break;
+
+            case CalpontSystemCatalog::DOUBLE:
+            case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeIntToXDouble); break;
+
+            case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeIntToLongDouble); break;
+
+            case CalpontSystemCatalog::DECIMAL:
+            case CalpontSystemCatalog::UDECIMAL:
+            {
+              /*
+                Signed INT to XDecimal
+                TODO:
+                - This code does not handle overflow that may happen on
+                  scale multiplication. Instead of returning a garbage value
+                  we should probably apply saturation here. In long terms we
+                  should implement DECIMAL(65,x) to avoid overflow completely
+                  (so the UNION between DECIMAL and integer can choose a proper
+                    DECIMAL(M,N) result data type to guarantee that any incoming
+                    integer value can fit into it).
+              */
+              if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+                result.emplace_back(normalizeIntToXDecimalWithScaleInt128);
+              else
+                result.emplace_back(normalizeIntToXDecimalWithScaleInt64);
+              break;
+            }
+
+            default:
+              ostringstream os;
+              os << "TupleUnion::normalize(): tried an illegal conversion: integer to "
+                << out->getColTypes()[i];
+              throw logic_error(os.str());
           }
 
-          case CalpontSystemCatalog::UTINYINT:
-          case CalpontSystemCatalog::USMALLINT:
-          case CalpontSystemCatalog::UMEDINT:
-          case CalpontSystemCatalog::UINT:
-          case CalpontSystemCatalog::UBIGINT:
+          break;
+
+        case CalpontSystemCatalog::UTINYINT:
+        case CalpontSystemCatalog::USMALLINT:
+        case CalpontSystemCatalog::UMEDINT:
+        case CalpontSystemCatalog::UINT:
+        case CalpontSystemCatalog::UBIGINT:
+          switch (out->getColTypes()[i])
           {
-            if (in.getScale(i))
+            case CalpontSystemCatalog::TINYINT:
+            case CalpontSystemCatalog::SMALLINT:
+            case CalpontSystemCatalog::MEDINT:
+            case CalpontSystemCatalog::INT:
+            case CalpontSystemCatalog::BIGINT:
             {
-              if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                result.emplace_back(normalizeIntToUintWithScaleInt128);
+              if (out->getScale(i))
+              {
+                if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+                  result.emplace_back(normalizeUintToIntWithScaleInt128);
+                else
+                  result.emplace_back(normalizeUntToIntWithScaleUint64);
+              } 
               else
-                result.emplace_back(normalizeIntToUintWithScaleInt64);
-            } 
-            else
-              result.emplace_back(normalizeIntToUintNoScale); 
-            break;
+                result.emplace_back(normalizeUintToIntNoScale); 
+              break;
+            }
+
+            case CalpontSystemCatalog::UTINYINT:
+            case CalpontSystemCatalog::USMALLINT:
+            case CalpontSystemCatalog::UMEDINT:
+            case CalpontSystemCatalog::UINT:
+            case CalpontSystemCatalog::UBIGINT: result.emplace_back(normalizeUintToUint); break;
+
+            case CalpontSystemCatalog::CHAR:
+            case CalpontSystemCatalog::TEXT:
+            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeUintToString); break;
+
+            case CalpontSystemCatalog::DATE:
+            case CalpontSystemCatalog::DATETIME:
+            case CalpontSystemCatalog::TIME:
+            case CalpontSystemCatalog::TIMESTAMP:
+              throw logic_error(
+                  "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
+
+            case CalpontSystemCatalog::FLOAT:
+            case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizUintToXFloat); break;
+
+            case CalpontSystemCatalog::DOUBLE:
+            case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeUintToXDouble); break;
+
+            case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeUintToLongDouble); break;
+
+            case CalpontSystemCatalog::DECIMAL:
+            case CalpontSystemCatalog::UDECIMAL:
+            {
+              /*
+                Unsigned INT to XDecimal
+                TODO:
+                - The overflow problem mentioned in the code under case "Signed INT to XDecimal:" is
+                  also applicable here.
+              */
+
+              if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+                result.emplace_back(normalizeUintToXDecimalWithScaleInt128);
+              else
+                result.emplace_back(normalizeUintToXDecimalWithScalUint64);
+              break;
+            }
+
+            default:
+              ostringstream os;
+              os << "TupleUnion::normalize(): tried an illegal conversion: integer to "
+                << out->getColTypes()[i];
+              throw logic_error(os.str());
           }
 
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeIntToString); break;
+          break;
 
-          case CalpontSystemCatalog::DATE:
-          case CalpontSystemCatalog::DATETIME:
-          case CalpontSystemCatalog::TIME:
-          case CalpontSystemCatalog::TIMESTAMP:
-            throw logic_error(
-                "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
+        case CalpontSystemCatalog::CHAR:
+        case CalpontSystemCatalog::TEXT:
+        case CalpontSystemCatalog::VARCHAR:
+          switch (out->getColTypes()[i])
+          {
+            case CalpontSystemCatalog::CHAR:
+            case CalpontSystemCatalog::TEXT:
+            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeStringToString); break;
+
+            default:
+            {
+              ostringstream os;
+              os << "TupleUnion::normalize(): tried an illegal conversion: string to " << out->getColTypes()[i];
+              throw logic_error(os.str());
+            }
+          }
+
+          break;
+
+        case CalpontSystemCatalog::DATE:
+          switch (out->getColTypes()[i])
+          {
+            case CalpontSystemCatalog::DATE: result.emplace_back(normalizeDateToDate); break;
+
+            case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeDateToDatetime); break;
+
+            // case CalpontSystemCatalog::TIMESTAMP:
+            // {
+            //   dataconvert::Date date(in.getUintField(i));
+            //   dataconvert::MySQLTime m_time;
+            //   m_time.year = date.year;
+            //   m_time.month = date.month;
+            //   m_time.day = date.day;
+            //   m_time.hour = 0;
+            //   m_time.minute = 0;
+            //   m_time.second = 0;
+            //   m_time.second_part = 0;
+
+            //   dataconvert::TimeStamp timeStamp;
+            //   bool isValid = true;
+            //   int64_t seconds = dataconvert::mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
+
+            //   if (!isValid)
+            //   {
+            //     timeStamp.reset();
+            //   }
+            //   else
+            //   {
+            //     timeStamp.second = seconds;
+            //     timeStamp.msecond = m_time.second_part;
+            //   }
+
+            //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
+            //   out->setUintField(outValue, i);
+            //   break;
+            // }
+
+            // case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeDateToTimestamp); break;
+
+            case CalpontSystemCatalog::CHAR:
+            case CalpontSystemCatalog::TEXT:
+            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeDateToString); break;
+
+            default:
+            {
+              ostringstream os;
+              os << "TupleUnion::normalize(): tried an illegal conversion: date to " << out->getColTypes()[i];
+              throw logic_error(os.str());
+            }
+          }
+
+          break;
+
+        case CalpontSystemCatalog::DATETIME:
+          switch (out->getColTypes()[i])
+          {
+            case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeDatetimeToDatetime); break;
+
+            case CalpontSystemCatalog::DATE: result.emplace_back(normalizeDatetimeToDate); break;
+
+            // case CalpontSystemCatalog::TIMESTAMP:
+            // {
+            //   uint64_t val = in.getUintField(i);
+            //   dataconvert::DateTime dtime(val);
+            //   dataconvert::MySQLTime m_time;
+            //   dataconvert::TimeStamp timeStamp;
+
+            //   m_time.year = dtime.year;
+            //   m_time.month = dtime.month;
+            //   m_time.day = dtime.day;
+            //   m_time.hour = dtime.hour;
+            //   m_time.minute = dtime.minute;
+            //   m_time.second = dtime.second;
+            //   m_time.second_part = dtime.msecond;
+
+            //   bool isValid = true;
+            //   int64_t seconds = mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
+
+            //   if (!isValid)
+            //   {
+            //     timeStamp.reset();
+            //   }
+            //   else
+            //   {
+            //     timeStamp.second = seconds;
+            //     timeStamp.msecond = m_time.second_part;
+            //   }
+
+            //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
+            //   out->setUintField(outValue, i);
+            //   break;
+            // }
+
+            // case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeDatetimeToTimestamp); break;
+
+            case CalpontSystemCatalog::CHAR:
+            case CalpontSystemCatalog::TEXT:
+            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeDatetimeToString); break;
+
+            default:
+            {
+              ostringstream os;
+              os << "TupleUnion::normalize(): tried an illegal conversion: datetime to "
+                << out->getColTypes()[i];
+              throw logic_error(os.str());
+            }
+          }
+
+          break;
+
+        case CalpontSystemCatalog::TIMESTAMP:
+          switch (out->getColTypes()[i])
+          {
+            case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeTimestampToTimestamp); break;
+
+            // case CalpontSystemCatalog::DATE:
+            // case CalpontSystemCatalog::DATETIME:
+            // {
+            //   uint64_t val = in.getUintField(i);
+            //   dataconvert::TimeStamp timestamp(val);
+            //   int64_t seconds = timestamp.second;
+            //   uint64_t outValue;
+
+            //   dataconvert::MySQLTime time;
+            //   dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
+
+            //   if (out->getColTypes()[i] == CalpontSystemCatalog::DATE)
+            //   {
+            //     dataconvert::Date date;
+            //     date.year = time.year;
+            //     date.month = time.month;
+            //     date.day = time.day;
+            //     date.spare = 0;
+            //     outValue = (uint32_t) * (reinterpret_cast<uint32_t*>(&date));
+            //   }
+            //   else
+            //   {
+            //     dataconvert::DateTime datetime;
+            //     datetime.year = time.year;
+            //     datetime.month = time.month;
+            //     datetime.day = time.day;
+            //     datetime.hour = time.hour;
+            //     datetime.minute = time.minute;
+            //     datetime.second = time.second;
+            //     datetime.msecond = timestamp.msecond;
+            //     outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&datetime));
+            //   }
+
+            //   out->setUintField(outValue, i);
+            //   break;
+            // }
+
+            // case CalpontSystemCatalog::DATE:
+            // case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeTimestampToDateX); break;
+
+            // case CalpontSystemCatalog::CHAR:
+            // case CalpontSystemCatalog::TEXT:
+            // case CalpontSystemCatalog::VARCHAR:
+            // {
+            //   string d = DataConvert::timestampToString(in.getUintField(i), fTimeZone);
+            //   out->setStringField(d, i);
+            //   break;
+            // }
+            
+            // case CalpontSystemCatalog::CHAR:
+            // case CalpontSystemCatalog::TEXT:
+            // case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeTimestampToString); break;
+
+            default:
+            {
+              ostringstream os;
+              os << "TupleUnion::normalize(): tried an illegal conversion: timestamp to "
+                << out->getColTypes()[i];
+              throw logic_error(os.str());
+            }
+          }
+
+          break;
+
+        case CalpontSystemCatalog::TIME:
+          switch (out->getColTypes()[i])
+          {
+            case CalpontSystemCatalog::TIME: result.emplace_back(normalizeTimeToTime); break;
+
+            case CalpontSystemCatalog::CHAR:
+            case CalpontSystemCatalog::TEXT:
+            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeTimeToString); break;
+
+            default:
+            {
+              ostringstream os;
+              os << "TupleUnion::normalize(): tried an illegal conversion: time to " << out->getColTypes()[i];
+              throw logic_error(os.str());
+            }
+          }
+
+          break;
 
           case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeIntToXFloat); break;
-
+          case CalpontSystemCatalog::UFLOAT:
           case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeIntToXDouble); break;
-
-          case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeIntToLongDouble); break;
-
-          case CalpontSystemCatalog::DECIMAL:
-          case CalpontSystemCatalog::UDECIMAL:
+          case CalpontSystemCatalog::UDOUBLE:
           {
-            /*
-               Signed INT to XDecimal
-               TODO:
-               - This code does not handle overflow that may happen on
-                 scale multiplication. Instead of returning a garbage value
-                 we should probably apply saturation here. In long terms we
-                 should implement DECIMAL(65,x) to avoid overflow completely
-                 (so the UNION between DECIMAL and integer can choose a proper
-                  DECIMAL(M,N) result data type to guarantee that any incoming
-                  integer value can fit into it).
-            */
-            if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-              result.emplace_back(normalizeIntToXDecimalWithScaleInt128);
-            else
-              result.emplace_back(normalizeIntToXDecimalWithScaleInt64);
-            break;
-          }
-
-          default:
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: integer to "
-               << out->getColTypes()[i];
-            throw logic_error(os.str());
-        }
-
-        break;
-
-      case CalpontSystemCatalog::UTINYINT:
-      case CalpontSystemCatalog::USMALLINT:
-      case CalpontSystemCatalog::UMEDINT:
-      case CalpontSystemCatalog::UINT:
-      case CalpontSystemCatalog::UBIGINT:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::TINYINT:
-          case CalpontSystemCatalog::SMALLINT:
-          case CalpontSystemCatalog::MEDINT:
-          case CalpontSystemCatalog::INT:
-          case CalpontSystemCatalog::BIGINT:
-          {
-            if (out->getScale(i))
+            switch (out->getColTypes()[i])
             {
+              case CalpontSystemCatalog::TINYINT:
+              case CalpontSystemCatalog::SMALLINT:
+              case CalpontSystemCatalog::MEDINT:
+              case CalpontSystemCatalog::INT:
+              case CalpontSystemCatalog::BIGINT:
+              {
+                if (out->getScale(i))
+                {
+                  if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+                    result.emplace_back(normalizeFloatingPointToIntWithScaleInt128);
+                  else
+                    result.emplace_back(normalizeFloatingPointToIntWithScaleInt);
+                } 
+                else
+                  result.emplace_back(normalizeFloatingPointToIntNoScale); 
+                break;
+              }
+
+            case CalpontSystemCatalog::UTINYINT:
+            case CalpontSystemCatalog::USMALLINT:
+            case CalpontSystemCatalog::UMEDINT:
+            case CalpontSystemCatalog::UINT:
+            case CalpontSystemCatalog::UBIGINT: result.emplace_back(normalizeFloatingPointToUint); break;
+
+            case CalpontSystemCatalog::FLOAT:
+            case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeFloatingPointToXFloat); break;
+
+            case CalpontSystemCatalog::DOUBLE:
+            case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeFloatingPointToXDouble); break;
+
+            case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeFloatingPointToLongDouble); break;
+
+            case CalpontSystemCatalog::CHAR:
+            case CalpontSystemCatalog::TEXT:
+            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeFloatingPointToString); break;
+            
+            case CalpontSystemCatalog::DECIMAL:
+            case CalpontSystemCatalog::UDECIMAL:
+            {
+              // xFLOAT or xDOUBLE to xDECIMAL conversion. Is it really possible?
+              // TODO:
+              // Perhaps we should add an assert here that this combination is not possible
+              // In the current reduction all problems mentioned in the code under
+              //  case "Signed INT to XDecimal" are also applicable here.
+              // TODO: isn't overflow possible below?
               if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                result.emplace_back(normalizeUintToIntWithScaleInt128);
+                result.emplace_back(normalizeFloatingPointToXDecimalWithScaleInt128);
               else
-                result.emplace_back(normalizeUntToIntWithScaleUint64);
-            } 
-            else
-              result.emplace_back(normalizeUintToIntNoScale); 
-            break;
+                result.emplace_back(normalizeFloatingPointToXDecimalWithScaleInt);
+              
+              break;
+            }
+
+            default:
+              ostringstream os;
+              os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
+                << out->getColTypes()[i];
+              throw logic_error(os.str());
           }
 
-          case CalpontSystemCatalog::UTINYINT:
-          case CalpontSystemCatalog::USMALLINT:
-          case CalpontSystemCatalog::UMEDINT:
-          case CalpontSystemCatalog::UINT:
-          case CalpontSystemCatalog::UBIGINT: result.emplace_back(normalizeUintToUint); break;
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeUintToString); break;
-
-          case CalpontSystemCatalog::DATE:
-          case CalpontSystemCatalog::DATETIME:
-          case CalpontSystemCatalog::TIME:
-          case CalpontSystemCatalog::TIMESTAMP:
-            throw logic_error(
-                "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
-
-          case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizUintToXFloat); break;
-
-          case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeUintToXDouble); break;
-
-          case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeUintToLongDouble); break;
-
-          case CalpontSystemCatalog::DECIMAL:
-          case CalpontSystemCatalog::UDECIMAL:
-          {
-            /*
-              Unsigned INT to XDecimal
-              TODO:
-              - The overflow problem mentioned in the code under case "Signed INT to XDecimal:" is
-                also applicable here.
-            */
-
-            if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-              result.emplace_back(normalizeUintToXDecimalWithScaleInt128);
-            else
-              result.emplace_back(normalizeUintToXDecimalWithScalUint64);
-            break;
-          }
-
-          default:
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: integer to "
-               << out->getColTypes()[i];
-            throw logic_error(os.str());
+          break;
         }
 
-        break;
-
-      case CalpontSystemCatalog::CHAR:
-      case CalpontSystemCatalog::TEXT:
-      case CalpontSystemCatalog::VARCHAR:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeStringToString); break;
-
-          default:
-          {
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: string to " << out->getColTypes()[i];
-            throw logic_error(os.str());
-          }
-        }
-
-        break;
-
-      case CalpontSystemCatalog::DATE:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::DATE: result.emplace_back(normalizeDateToDate); break;
-
-          case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeDateToDatetime); break;
-
-          // case CalpontSystemCatalog::TIMESTAMP:
-          // {
-          //   dataconvert::Date date(in.getUintField(i));
-          //   dataconvert::MySQLTime m_time;
-          //   m_time.year = date.year;
-          //   m_time.month = date.month;
-          //   m_time.day = date.day;
-          //   m_time.hour = 0;
-          //   m_time.minute = 0;
-          //   m_time.second = 0;
-          //   m_time.second_part = 0;
-
-          //   dataconvert::TimeStamp timeStamp;
-          //   bool isValid = true;
-          //   int64_t seconds = dataconvert::mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
-
-          //   if (!isValid)
-          //   {
-          //     timeStamp.reset();
-          //   }
-          //   else
-          //   {
-          //     timeStamp.second = seconds;
-          //     timeStamp.msecond = m_time.second_part;
-          //   }
-
-          //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
-          //   out->setUintField(outValue, i);
-          //   break;
-          // }
-
-          // case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeDateToTimestamp); break;
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeDateToString); break;
-
-          default:
-          {
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: date to " << out->getColTypes()[i];
-            throw logic_error(os.str());
-          }
-        }
-
-        break;
-
-      case CalpontSystemCatalog::DATETIME:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeDatetimeToDatetime); break;
-
-          case CalpontSystemCatalog::DATE: result.emplace_back(normalizeDatetimeToDate); break;
-
-          // case CalpontSystemCatalog::TIMESTAMP:
-          // {
-          //   uint64_t val = in.getUintField(i);
-          //   dataconvert::DateTime dtime(val);
-          //   dataconvert::MySQLTime m_time;
-          //   dataconvert::TimeStamp timeStamp;
-
-          //   m_time.year = dtime.year;
-          //   m_time.month = dtime.month;
-          //   m_time.day = dtime.day;
-          //   m_time.hour = dtime.hour;
-          //   m_time.minute = dtime.minute;
-          //   m_time.second = dtime.second;
-          //   m_time.second_part = dtime.msecond;
-
-          //   bool isValid = true;
-          //   int64_t seconds = mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
-
-          //   if (!isValid)
-          //   {
-          //     timeStamp.reset();
-          //   }
-          //   else
-          //   {
-          //     timeStamp.second = seconds;
-          //     timeStamp.msecond = m_time.second_part;
-          //   }
-
-          //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
-          //   out->setUintField(outValue, i);
-          //   break;
-          // }
-
-          // case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeDatetimeToTimestamp); break;
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeDatetimeToString); break;
-
-          default:
-          {
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: datetime to "
-               << out->getColTypes()[i];
-            throw logic_error(os.str());
-          }
-        }
-
-        break;
-
-      case CalpontSystemCatalog::TIMESTAMP:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeTimestampToTimestamp); break;
-
-          // case CalpontSystemCatalog::DATE:
-          // case CalpontSystemCatalog::DATETIME:
-          // {
-          //   uint64_t val = in.getUintField(i);
-          //   dataconvert::TimeStamp timestamp(val);
-          //   int64_t seconds = timestamp.second;
-          //   uint64_t outValue;
-
-          //   dataconvert::MySQLTime time;
-          //   dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
-
-          //   if (out->getColTypes()[i] == CalpontSystemCatalog::DATE)
-          //   {
-          //     dataconvert::Date date;
-          //     date.year = time.year;
-          //     date.month = time.month;
-          //     date.day = time.day;
-          //     date.spare = 0;
-          //     outValue = (uint32_t) * (reinterpret_cast<uint32_t*>(&date));
-          //   }
-          //   else
-          //   {
-          //     dataconvert::DateTime datetime;
-          //     datetime.year = time.year;
-          //     datetime.month = time.month;
-          //     datetime.day = time.day;
-          //     datetime.hour = time.hour;
-          //     datetime.minute = time.minute;
-          //     datetime.second = time.second;
-          //     datetime.msecond = timestamp.msecond;
-          //     outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&datetime));
-          //   }
-
-          //   out->setUintField(outValue, i);
-          //   break;
-          // }
-
-          // case CalpontSystemCatalog::DATE:
-          // case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeTimestampToDateX); break;
-
-          // case CalpontSystemCatalog::CHAR:
-          // case CalpontSystemCatalog::TEXT:
-          // case CalpontSystemCatalog::VARCHAR:
-          // {
-          //   string d = DataConvert::timestampToString(in.getUintField(i), fTimeZone);
-          //   out->setStringField(d, i);
-          //   break;
-          // }
-          
-          // case CalpontSystemCatalog::CHAR:
-          // case CalpontSystemCatalog::TEXT:
-          // case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeTimestampToString); break;
-
-          default:
-          {
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: timestamp to "
-               << out->getColTypes()[i];
-            throw logic_error(os.str());
-          }
-        }
-
-        break;
-
-      case CalpontSystemCatalog::TIME:
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::TIME: result.emplace_back(normalizeTimeToTime); break;
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeTimeToString); break;
-
-          default:
-          {
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: time to " << out->getColTypes()[i];
-            throw logic_error(os.str());
-          }
-        }
-
-        break;
-
-        case CalpontSystemCatalog::FLOAT:
-        case CalpontSystemCatalog::UFLOAT:
-        case CalpontSystemCatalog::DOUBLE:
-        case CalpontSystemCatalog::UDOUBLE:
+        case CalpontSystemCatalog::LONGDOUBLE:
         {
           switch (out->getColTypes()[i])
           {
@@ -1096,209 +1163,141 @@ namespace
               if (out->getScale(i))
               {
                 if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                  result.emplace_back(normalizeFloatingPointToIntWithScaleInt128);
+                  result.emplace_back(normalizeLongDoubleToIntWithScaleInt128);
                 else
-                  result.emplace_back(normalizeFloatingPointToIntWithScaleInt);
+                  result.emplace_back(normalizeLongDoubleToIntWithScaleInt);
               } 
               else
-                result.emplace_back(normalizeFloatingPointToIntNoScale); 
+                result.emplace_back(normalizeLongDoubleToIntNoScale); 
               break;
             }
 
-          case CalpontSystemCatalog::UTINYINT:
-          case CalpontSystemCatalog::USMALLINT:
-          case CalpontSystemCatalog::UMEDINT:
-          case CalpontSystemCatalog::UINT:
-          case CalpontSystemCatalog::UBIGINT: result.emplace_back(normalizeFloatingPointToUint); break;
+            case CalpontSystemCatalog::UTINYINT:
+            case CalpontSystemCatalog::USMALLINT:
+            case CalpontSystemCatalog::UMEDINT:
+            case CalpontSystemCatalog::UINT:
+            case CalpontSystemCatalog::UBIGINT: result.emplace_back(normalizeLongDoubleToUint); break;
 
-          case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeFloatingPointToXFloat); break;
+            case CalpontSystemCatalog::FLOAT:
+            case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeLongDoubleToXFloat); break;
 
-          case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeFloatingPointToXDouble); break;
+            case CalpontSystemCatalog::DOUBLE:
+            case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeLongDoubleToXDouble); break;
 
-          case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeFloatingPointToLongDouble); break;
+            case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeLongDoubleToLongDouble); break;
 
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeFloatingPointToString); break;
-          
-          case CalpontSystemCatalog::DECIMAL:
-          case CalpontSystemCatalog::UDECIMAL:
-          {
-            // xFLOAT or xDOUBLE to xDECIMAL conversion. Is it really possible?
-            // TODO:
-            // Perhaps we should add an assert here that this combination is not possible
-            // In the current reduction all problems mentioned in the code under
-            //  case "Signed INT to XDecimal" are also applicable here.
-            // TODO: isn't overflow possible below?
-            if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-              result.emplace_back(normalizeFloatingPointToXDecimalWithScaleInt128);
-            else
-              result.emplace_back(normalizeFloatingPointToXDecimalWithScaleInt);
-            
-            break;
-          }
+            case CalpontSystemCatalog::CHAR:
+            case CalpontSystemCatalog::TEXT:
+            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeLongDoubleToString); break;
 
-          default:
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
-               << out->getColTypes()[i];
-            throw logic_error(os.str());
-        }
-
-        break;
-      }
-
-      case CalpontSystemCatalog::LONGDOUBLE:
-      {
-        switch (out->getColTypes()[i])
-        {
-          case CalpontSystemCatalog::TINYINT:
-          case CalpontSystemCatalog::SMALLINT:
-          case CalpontSystemCatalog::MEDINT:
-          case CalpontSystemCatalog::INT:
-          case CalpontSystemCatalog::BIGINT:
-          {
-            if (out->getScale(i))
+            case CalpontSystemCatalog::DECIMAL:
+            case CalpontSystemCatalog::UDECIMAL:
             {
+              // LONGDOUBLE to xDECIMAL conversions: is it really possible?
+              // TODO:
+              // Perhaps we should add an assert here that this combination is not possible
+              // In the current reduction all problems mentioned in the code under
+              //  case "Signed INT to XDecimal" are also applicable here.
               if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                result.emplace_back(normalizeLongDoubleToIntWithScaleInt128);
+                result.emplace_back(normalizeLongDoubleToXDecimalWithScaleInt128);
               else
-                result.emplace_back(normalizeLongDoubleToIntWithScaleInt);
-            } 
-            else
-              result.emplace_back(normalizeLongDoubleToIntNoScale); 
-            break;
+                result.emplace_back(normalizeLongDoubleToXDecimalWithScaleInt);
+              
+              break;
+            }
+
+            default:
+              ostringstream os;
+              os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
+                << out->getColTypes()[i];
+              throw logic_error(os.str());
           }
 
-          case CalpontSystemCatalog::UTINYINT:
-          case CalpontSystemCatalog::USMALLINT:
-          case CalpontSystemCatalog::UMEDINT:
-          case CalpontSystemCatalog::UINT:
-          case CalpontSystemCatalog::UBIGINT: result.emplace_back(normalizeLongDoubleToUint); break;
-
-          case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeLongDoubleToXFloat); break;
-
-          case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeLongDoubleToXDouble); break;
-
-          case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeLongDoubleToLongDouble); break;
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeLongDoubleToString); break;
-
-          case CalpontSystemCatalog::DECIMAL:
-          case CalpontSystemCatalog::UDECIMAL:
-          {
-            // LONGDOUBLE to xDECIMAL conversions: is it really possible?
-            // TODO:
-            // Perhaps we should add an assert here that this combination is not possible
-            // In the current reduction all problems mentioned in the code under
-            //  case "Signed INT to XDecimal" are also applicable here.
-            if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-              result.emplace_back(normalizeLongDoubleToXDecimalWithScaleInt128);
-            else
-              result.emplace_back(normalizeLongDoubleToXDecimalWithScaleInt);
-            
-            break;
-          }
-
-          default:
-            ostringstream os;
-            os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
-               << out->getColTypes()[i];
-            throw logic_error(os.str());
+          break;
         }
 
-        break;
-      }
-
-      case CalpontSystemCatalog::DECIMAL:
-      case CalpontSystemCatalog::UDECIMAL:
-      {
-        switch (out->getColTypes()[i])
+        case CalpontSystemCatalog::DECIMAL:
+        case CalpontSystemCatalog::UDECIMAL:
         {
-          case CalpontSystemCatalog::TINYINT:
-          case CalpontSystemCatalog::SMALLINT:
-          case CalpontSystemCatalog::MEDINT:
-          case CalpontSystemCatalog::INT:
-          case CalpontSystemCatalog::BIGINT:
-          case CalpontSystemCatalog::UTINYINT:
-          case CalpontSystemCatalog::USMALLINT:
-          case CalpontSystemCatalog::UMEDINT:
-          case CalpontSystemCatalog::UINT:
-          case CalpontSystemCatalog::UBIGINT:
-          case CalpontSystemCatalog::DECIMAL:
-          case CalpontSystemCatalog::UDECIMAL:
+          switch (out->getColTypes()[i])
           {
-            if (datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)))
+            case CalpontSystemCatalog::TINYINT:
+            case CalpontSystemCatalog::SMALLINT:
+            case CalpontSystemCatalog::MEDINT:
+            case CalpontSystemCatalog::INT:
+            case CalpontSystemCatalog::BIGINT:
+            case CalpontSystemCatalog::UTINYINT:
+            case CalpontSystemCatalog::USMALLINT:
+            case CalpontSystemCatalog::UMEDINT:
+            case CalpontSystemCatalog::UINT:
+            case CalpontSystemCatalog::UBIGINT:
+            case CalpontSystemCatalog::DECIMAL:
+            case CalpontSystemCatalog::UDECIMAL:
             {
-              if (out->getScale(i) == in.getScale(i))
-                result.emplace_back(normalizeWideXDecimalToXIntNoScale);
-              else if (out->getScale(i) > in.getScale(i))
-                result.emplace_back(normalizeWideXDecimalToXIntWithScaleInt128);
-              else  // should not happen, the output's scale is the largest
-                throw logic_error("TupleUnion::normalize(): incorrect scale setting");
-            }
-            // If output type is narrow decimal, input type
-            // has to be narrow decimal as well.
-            else
-            {
-              if (out->getScale(i) == in.getScale(i))
-                result.emplace_back(normalizeXDecimalToXIntNoScale);
-              else if (out->getScale(i) > in.getScale(i))
-                result.emplace_back(normalizeXDecimalToXIntWithScaleInt128);
-              else  // should not happen, the output's scale is the largest
-                throw logic_error("TupleUnion::normalize(): incorrect scale setting");
+              if (datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)))
+              {
+                if (out->getScale(i) == in.getScale(i))
+                  result.emplace_back(normalizeWideXDecimalToXIntNoScale);
+                else if (out->getScale(i) > in.getScale(i))
+                  result.emplace_back(normalizeWideXDecimalToXIntWithScaleInt128);
+                else  // should not happen, the output's scale is the largest
+                  throw logic_error("TupleUnion::normalize(): incorrect scale setting");
+              }
+              // If output type is narrow decimal, input type
+              // has to be narrow decimal as well.
+              else
+              {
+                if (out->getScale(i) == in.getScale(i))
+                  result.emplace_back(normalizeXDecimalToXIntNoScale);
+                else if (out->getScale(i) > in.getScale(i))
+                  result.emplace_back(normalizeXDecimalToXIntWithScaleInt128);
+                else  // should not happen, the output's scale is the largest
+                  throw logic_error("TupleUnion::normalize(): incorrect scale setting");
+              }
+
+              break;
             }
 
-            break;
+            case CalpontSystemCatalog::FLOAT:
+            case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeXDecimalToXFloat); break; 
+
+            case CalpontSystemCatalog::DOUBLE:
+            case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeXDecimalToXDouble); break;
+
+            case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeXDecimalToLongDouble); break;
+
+            case CalpontSystemCatalog::CHAR:
+            case CalpontSystemCatalog::TEXT:
+            case CalpontSystemCatalog::VARCHAR:
+            default:
+            {
+              if (LIKELY(in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH))
+                result.emplace_back(normalizeWideXDecimalToString);
+              else
+                result.emplace_back(normalizeXDecimalToString);
+              break;
+            }
           }
 
-          case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeXDecimalToXFloat); break; 
-
-          case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeXDecimalToXDouble); break;
-
-          case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeXDecimalToLongDouble); break;
-
-          case CalpontSystemCatalog::CHAR:
-          case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR:
-          default:
-          {
-            if (LIKELY(in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH))
-              result.emplace_back(normalizeWideXDecimalToString);
-            else
-              result.emplace_back(normalizeXDecimalToString);
-            break;
-          }
+          break;
         }
 
-        break;
-      }
+        case CalpontSystemCatalog::BLOB:
+        case CalpontSystemCatalog::VARBINARY: result.emplace_back(normalizeBlobVarbinary); break;
 
-      case CalpontSystemCatalog::BLOB:
-      case CalpontSystemCatalog::VARBINARY: result.emplace_back(normalizeBlobVarbinary); break;
-
-      default:
-      {
-        ostringstream os;
-        os << "TupleUnion::normalize(): unknown input type (" << in.getColTypes()[i] << ")";
-        cout << os.str() << endl;
-        throw logic_error(os.str());
+        default:
+        {
+          ostringstream os;
+          os << "TupleUnion::normalize(): unknown input type (" << in.getColTypes()[i] << ")";
+          cout << os.str() << endl;
+          throw logic_error(os.str());
+        }
       }
     }
+
+    idbassert(out->getColumnCount() == result.size());
+    return result;
   }
-
-  idbassert(out->getColumnCount() == result.size());
-  return result;
-}
-
 
 }  // namespace
 
