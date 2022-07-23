@@ -250,6 +250,50 @@ namespace
     out->setIntField(in.getIntField(i), i);
   }
 
+  void normalizeDateToDatetime(const Row& in, Row* out, uint32_t i) 
+  {
+    uint64_t date = in.getUintField(i);
+    date &= ~0x3f;  // zero the 'spare' field
+    date <<= 32;
+    out->setUintField(date, i);
+  }
+
+  // void normalizeDateToTimestamp(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   dataconvert::Date date(in.getUintField(i));
+  //   dataconvert::MySQLTime m_time;
+  //   m_time.year = date.year;
+  //   m_time.month = date.month;
+  //   m_time.day = date.day;
+  //   m_time.hour = 0;
+  //   m_time.minute = 0;
+  //   m_time.second = 0;
+  //   m_time.second_part = 0;
+
+  //   dataconvert::TimeStamp timeStamp;
+  //   bool isValid = true;
+  //   int64_t seconds = dataconvert::mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
+
+  //   if (!isValid)
+  //   {
+  //     timeStamp.reset();
+  //   }
+  //   else
+  //   {
+  //     timeStamp.second = seconds;
+  //     timeStamp.msecond = m_time.second_part;
+  //   }
+
+  //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
+  //   out->setUintField(outValue, i);
+  // }
+
+  void normalizeDateToString(const Row& in, Row* out, uint32_t i) 
+  {
+    string d = DataConvert::dateToString(in.getUintField(i));
+    out->setStringField(d, i);
+  }
+
   std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> inferNormalizeFunctions(const Row& in, Row* out)
   {
   uint32_t i;
@@ -456,14 +500,7 @@ namespace
         {
           case CalpontSystemCatalog::DATE: result.emplace_back(normalizeDateToDate); break;
 
-          // case CalpontSystemCatalog::DATETIME:
-          // {
-          //   uint64_t date = in.getUintField(i);
-          //   date &= ~0x3f;  // zero the 'spare' field
-          //   date <<= 32;
-          //   out->setUintField(date, i);
-          //   break;
-          // }
+          case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeDateToDatetime); break;
 
           // case CalpontSystemCatalog::TIMESTAMP:
           // {
@@ -496,14 +533,11 @@ namespace
           //   break;
           // }
 
-          // case CalpontSystemCatalog::CHAR:
-          // case CalpontSystemCatalog::TEXT:
-          // case CalpontSystemCatalog::VARCHAR:
-          // {
-          //   string d = DataConvert::dateToString(in.getUintField(i));
-          //   out->setStringField(d, i);
-          //   break;
-          // }
+          // case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeDateToTimestamp); break;
+
+          case CalpontSystemCatalog::CHAR:
+          case CalpontSystemCatalog::TEXT:
+          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeDateToString); break;
 
           default:
           {
