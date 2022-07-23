@@ -309,11 +309,7 @@ namespace
 
           case CalpontSystemCatalog::CHAR:
           case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR:
-          {
-            result.emplace_back(normalizeIntToString);
-            break;
-          }
+          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeIntToString); break;
 
           case CalpontSystemCatalog::DATE:
           case CalpontSystemCatalog::DATETIME:
@@ -323,24 +319,12 @@ namespace
                 "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
 
           case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT:
-          {
-            result.emplace_back(normalizeIntToXFloat);
-            break;
-          }
+          case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeIntToXFloat); break;
 
           case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE:
-          {
-            result.emplace_back(normalizeIntToXDouble);
-            break;
-          }
+          case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeIntToXDouble); break;
 
-          case CalpontSystemCatalog::LONGDOUBLE:
-          {
-            result.emplace_back(normalizeIntToLongDouble);
-            break;
-          }
+          case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeIntToLongDouble); break;
 
           case CalpontSystemCatalog::DECIMAL:
           case CalpontSystemCatalog::UDECIMAL:
@@ -397,8 +381,6 @@ namespace
             break;
           }
 
-          
-
           case CalpontSystemCatalog::UTINYINT:
           case CalpontSystemCatalog::USMALLINT:
           case CalpontSystemCatalog::UMEDINT:
@@ -407,11 +389,7 @@ namespace
 
           case CalpontSystemCatalog::CHAR:
           case CalpontSystemCatalog::TEXT:
-          case CalpontSystemCatalog::VARCHAR:
-          {
-            result.emplace_back(normalizeUintToString);
-            break;
-          }
+          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeUintToString); break;
 
           case CalpontSystemCatalog::DATE:
           case CalpontSystemCatalog::DATETIME:
@@ -421,24 +399,12 @@ namespace
                 "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
 
           case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT:
-          {
-            result.emplace_back(normalizUintToXFloat);
-            break;
-          }
+          case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizUintToXFloat); break;
 
           case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE:
-          {
-            result.emplace_back(normalizeUintToXDouble);
-            break;
-          }
+          case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeUintToXDouble); break;
 
-          case CalpontSystemCatalog::LONGDOUBLE:
-          {
-            result.emplace_back(normalizeUintToLongDouble);
-            break;
-          }
+          case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeUintToLongDouble); break;
 
           case CalpontSystemCatalog::DECIMAL:
           case CalpontSystemCatalog::UDECIMAL:
