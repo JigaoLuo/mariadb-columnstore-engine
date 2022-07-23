@@ -488,6 +488,94 @@ namespace
     out->setIntField(ival, i);
   }
 
+  void normalizeLongDoubleToIntNoScale(const Row& in, Row* out, uint32_t i) 
+  {
+    long double val = in.getLongDoubleField(i);
+    out->setIntField((int64_t)val, i);
+  }
+
+  void normalizeLongDoubleToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  {
+    long double val = in.getLongDoubleField(i);
+    /* have to pick a scale to use for the double. using 5... */
+    uint32_t scale = 5;
+    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+    int diff = out->getScale(i) - scale;
+    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
+    out->setInt128Field(ival, i);
+  }
+
+  void normalizeLongDoubleToIntWithScaleInt(const Row& in, Row* out, uint32_t i) 
+  {
+    long double val = in.getLongDoubleField(i);
+    /* have to pick a scale to use for the double. using 5... */
+    uint32_t scale = 5;
+    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+    int diff = out->getScale(i) - scale;
+    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
+    out->setIntField(ival, i);
+  }
+
+  void normalizeLongDoubleToUint(const Row& in, Row* out, uint32_t i) 
+  {
+    long double val = in.getLongDoubleField(i);
+    out->setUintField((uint64_t)val, i);
+  }
+
+  void normalizeLongDoubleToXFloat(const Row& in, Row* out, uint32_t i) 
+  {
+    long double val = in.getLongDoubleField(i);
+    out->setFloatField(val, i);
+  }
+
+  void normalizeLongDoubleToXDouble(const Row& in, Row* out, uint32_t i) 
+  {
+    long double val = in.getLongDoubleField(i);
+    out->setDoubleField(val, i);
+  }
+
+  void normalizeLongDoubleToLongDouble(const Row& in, Row* out, uint32_t i) 
+  {
+    long double val = in.getLongDoubleField(i);
+    out->setIntField((int64_t)val, i);
+  }
+
+  void normalizeLongDoubleToString(const Row& in, Row* out, uint32_t i) 
+  {
+    long double val = in.getLongDoubleField(i);
+    ostringstream os;
+    os.precision(15);  // to match mysql's output
+    os << val;
+    out->setStringField(os.str(), i);
+  }
+
+  void normalizeLongDoubleToXDecimalWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  {
+    long double val = in.getLongDoubleField(i);
+    /* have to pick a scale to use for the double. using 5... */
+    uint32_t scale = 5;
+    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+    int diff = out->getScale(i) - scale;
+    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
+    out->setInt128Field(ival, i);
+  }
+
+  void normalizeLongDoubleToXDecimalWithScaleInt(const Row& in, Row* out, uint32_t i) 
+  {
+    long double val = in.getLongDoubleField(i);
+    /* have to pick a scale to use for the double. using 5... */
+    uint32_t scale = 5;
+    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+    int diff = out->getScale(i) - scale;
+    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
+    out->setIntField(ival, i);
+  }
+
+
   std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> inferNormalizeFunctions(const Row& in, Row* out)
   {
   uint32_t i;
@@ -958,80 +1046,71 @@ namespace
         break;
       }
 
-      // case CalpontSystemCatalog::LONGDOUBLE:
-      // {
-      //   long double val = in.getLongDoubleField(i);
+      case CalpontSystemCatalog::LONGDOUBLE:
+      {
+        switch (out->getColTypes()[i])
+        {
+          case CalpontSystemCatalog::TINYINT:
+          case CalpontSystemCatalog::SMALLINT:
+          case CalpontSystemCatalog::MEDINT:
+          case CalpontSystemCatalog::INT:
+          case CalpontSystemCatalog::BIGINT:
+          {
+            if (out->getScale(i))
+            {
+              if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+                result.emplace_back(normalizeLongDoubleToIntWithScaleInt128);
+              else
+                result.emplace_back(normalizeLongDoubleToIntWithScaleInt);
+            } 
+            else
+              result.emplace_back(normalizeLongDoubleToIntNoScale); 
+            break;
+          }
 
-      //   switch (out->getColTypes()[i])
-      //   {
-      //     case CalpontSystemCatalog::TINYINT:
-      //     case CalpontSystemCatalog::SMALLINT:
-      //     case CalpontSystemCatalog::MEDINT:
-      //     case CalpontSystemCatalog::INT:
-      //     case CalpontSystemCatalog::BIGINT:
-      //       if (out->getScale(i))
-      //         goto dec4;
+          case CalpontSystemCatalog::UTINYINT:
+          case CalpontSystemCatalog::USMALLINT:
+          case CalpontSystemCatalog::UMEDINT:
+          case CalpontSystemCatalog::UINT:
+          case CalpontSystemCatalog::UBIGINT: result.emplace_back(normalizeLongDoubleToUint); break;
 
-      //       out->setIntField((int64_t)val, i);
-      //       break;
+          case CalpontSystemCatalog::FLOAT:
+          case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeLongDoubleToXFloat); break;
 
-      //     case CalpontSystemCatalog::UTINYINT:
-      //     case CalpontSystemCatalog::USMALLINT:
-      //     case CalpontSystemCatalog::UMEDINT:
-      //     case CalpontSystemCatalog::UINT:
-      //     case CalpontSystemCatalog::UBIGINT: out->setUintField((uint64_t)val, i); break;
+          case CalpontSystemCatalog::DOUBLE:
+          case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeLongDoubleToXDouble); break;
 
-      //     case CalpontSystemCatalog::FLOAT:
-      //     case CalpontSystemCatalog::UFLOAT: out->setFloatField(val, i); break;
+          case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeLongDoubleToLongDouble); break;
 
-      //     case CalpontSystemCatalog::DOUBLE:
-      //     case CalpontSystemCatalog::UDOUBLE: out->setDoubleField(val, i); break;
+          case CalpontSystemCatalog::CHAR:
+          case CalpontSystemCatalog::TEXT:
+          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeLongDoubleToString); break;
 
-      //     case CalpontSystemCatalog::LONGDOUBLE: out->setLongDoubleField(val, i); break;
+          case CalpontSystemCatalog::DECIMAL:
+          case CalpontSystemCatalog::UDECIMAL:
+          {
+            // LONGDOUBLE to xDECIMAL conversions: is it really possible?
+            // TODO:
+            // Perhaps we should add an assert here that this combination is not possible
+            // In the current reduction all problems mentioned in the code under
+            //  case "Signed INT to XDecimal" are also applicable here.
+            if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+              result.emplace_back(normalizeLongDoubleToXDecimalWithScaleInt128);
+            else
+              result.emplace_back(normalizeLongDoubleToXDecimalWithScaleInt);
+            
+            break;
+          }
 
-      //     case CalpontSystemCatalog::CHAR:
-      //     case CalpontSystemCatalog::TEXT:
-      //     case CalpontSystemCatalog::VARCHAR:
-      //     {
-      //       ostringstream os;
-      //       os.precision(15);  // to match mysql's output
-      //       os << val;
-      //       out->setStringField(os.str(), i);
-      //       break;
-      //     }
+          default:
+            ostringstream os;
+            os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
+               << out->getColTypes()[i];
+            throw logic_error(os.str());
+        }
 
-      //     case CalpontSystemCatalog::DECIMAL:
-      //     case CalpontSystemCatalog::UDECIMAL:
-      //     {
-      //     dec4: /* have to pick a scale to use for the double. using 5... */
-      //       uint32_t scale = 5;
-      //       uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-      //       int diff = out->getScale(i) - scale;
-
-      //       // LONGDOUBLE to xDECIMAL conversions: is it really possible?
-      //       // TODO:
-      //       // Perhaps we should add an assert here that this combination is not possible
-      //       // In the current reduction all problems mentioned in the code under
-      //       //  label "dec1:" are also applicable here.
-      //       ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-
-      //       if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-      //         out->setInt128Field(ival, i);
-      //       else
-      //         out->setIntField(ival, i);
-
-      //       break;
-      //     }
-
-      //     default:
-      //       ostringstream os;
-      //       os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
-      //          << out->getColTypes()[i];
-      //       throw logic_error(os.str());
-      //   }
-
-      //   break;
-      // }
+        break;
+      }
 
       // case CalpontSystemCatalog::DECIMAL:
       // case CalpontSystemCatalog::UDECIMAL:
