@@ -344,6 +344,52 @@ namespace
     out->setStringField(d, i);
   }
 
+  void normalizeTimestampToTimestamp(const Row& in, Row* out, uint32_t i) 
+  {
+    out->setIntField(in.getIntField(i), i);
+  }
+
+  // void normalizeTimestampToDateX(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   uint64_t val = in.getUintField(i);
+  //   dataconvert::TimeStamp timestamp(val);
+  //   int64_t seconds = timestamp.second;
+  //   uint64_t outValue;
+
+  //   dataconvert::MySQLTime time;
+  //   dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
+
+  //   if (out->getColTypes()[i] == CalpontSystemCatalog::DATE)
+  //   {
+  //     dataconvert::Date date;
+  //     date.year = time.year;
+  //     date.month = time.month;
+  //     date.day = time.day;
+  //     date.spare = 0;
+  //     outValue = (uint32_t) * (reinterpret_cast<uint32_t*>(&date));
+  //   }
+  //   else
+  //   {
+  //     dataconvert::DateTime datetime;
+  //     datetime.year = time.year;
+  //     datetime.month = time.month;
+  //     datetime.day = time.day;
+  //     datetime.hour = time.hour;
+  //     datetime.minute = time.minute;
+  //     datetime.second = time.second;
+  //     datetime.msecond = timestamp.msecond;
+  //     outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&datetime));
+  //   }
+
+  //   out->setUintField(outValue, i);
+  // }
+
+  // void normalizeTimestampToString(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   string d = DataConvert::timestampToString(in.getUintField(i), fTimeZone);
+  //   out->setStringField(d, i);
+  // }
+
   std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> inferNormalizeFunctions(const Row& in, Row* out)
   {
   uint32_t i;
@@ -656,67 +702,74 @@ namespace
 
         break;
 
-      // case CalpontSystemCatalog::TIMESTAMP:
-      //   switch (out->getColTypes()[i])
-      //   {
-      //     case CalpontSystemCatalog::TIMESTAMP: out->setIntField(in.getIntField(i), i); break;
+      case CalpontSystemCatalog::TIMESTAMP:
+        switch (out->getColTypes()[i])
+        {
+          case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeTimestampToTimestamp); break;
 
-      //     case CalpontSystemCatalog::DATE:
-      //     case CalpontSystemCatalog::DATETIME:
-      //     {
-      //       uint64_t val = in.getUintField(i);
-      //       dataconvert::TimeStamp timestamp(val);
-      //       int64_t seconds = timestamp.second;
-      //       uint64_t outValue;
+          // case CalpontSystemCatalog::DATE:
+          // case CalpontSystemCatalog::DATETIME:
+          // {
+          //   uint64_t val = in.getUintField(i);
+          //   dataconvert::TimeStamp timestamp(val);
+          //   int64_t seconds = timestamp.second;
+          //   uint64_t outValue;
 
-      //       dataconvert::MySQLTime time;
-      //       dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
+          //   dataconvert::MySQLTime time;
+          //   dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
 
-      //       if (out->getColTypes()[i] == CalpontSystemCatalog::DATE)
-      //       {
-      //         dataconvert::Date date;
-      //         date.year = time.year;
-      //         date.month = time.month;
-      //         date.day = time.day;
-      //         date.spare = 0;
-      //         outValue = (uint32_t) * (reinterpret_cast<uint32_t*>(&date));
-      //       }
-      //       else
-      //       {
-      //         dataconvert::DateTime datetime;
-      //         datetime.year = time.year;
-      //         datetime.month = time.month;
-      //         datetime.day = time.day;
-      //         datetime.hour = time.hour;
-      //         datetime.minute = time.minute;
-      //         datetime.second = time.second;
-      //         datetime.msecond = timestamp.msecond;
-      //         outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&datetime));
-      //       }
+          //   if (out->getColTypes()[i] == CalpontSystemCatalog::DATE)
+          //   {
+          //     dataconvert::Date date;
+          //     date.year = time.year;
+          //     date.month = time.month;
+          //     date.day = time.day;
+          //     date.spare = 0;
+          //     outValue = (uint32_t) * (reinterpret_cast<uint32_t*>(&date));
+          //   }
+          //   else
+          //   {
+          //     dataconvert::DateTime datetime;
+          //     datetime.year = time.year;
+          //     datetime.month = time.month;
+          //     datetime.day = time.day;
+          //     datetime.hour = time.hour;
+          //     datetime.minute = time.minute;
+          //     datetime.second = time.second;
+          //     datetime.msecond = timestamp.msecond;
+          //     outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&datetime));
+          //   }
 
-      //       out->setUintField(outValue, i);
-      //       break;
-      //     }
+          //   out->setUintField(outValue, i);
+          //   break;
+          // }
 
-      //     case CalpontSystemCatalog::CHAR:
-      //     case CalpontSystemCatalog::TEXT:
-      //     case CalpontSystemCatalog::VARCHAR:
-      //     {
-      //       string d = DataConvert::timestampToString(in.getUintField(i), fTimeZone);
-      //       out->setStringField(d, i);
-      //       break;
-      //     }
+          // case CalpontSystemCatalog::DATE:
+          // case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeTimestampToDateX); break;
 
-      //     default:
-      //     {
-      //       ostringstream os;
-      //       os << "TupleUnion::normalize(): tried an illegal conversion: timestamp to "
-      //          << out->getColTypes()[i];
-      //       throw logic_error(os.str());
-      //     }
-      //   }
+          // case CalpontSystemCatalog::CHAR:
+          // case CalpontSystemCatalog::TEXT:
+          // case CalpontSystemCatalog::VARCHAR:
+          // {
+          //   string d = DataConvert::timestampToString(in.getUintField(i), fTimeZone);
+          //   out->setStringField(d, i);
+          //   break;
+          // }
+          
+          // case CalpontSystemCatalog::CHAR:
+          // case CalpontSystemCatalog::TEXT:
+          // case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeTimestampToString); break;
 
-      //   break;
+          default:
+          {
+            ostringstream os;
+            os << "TupleUnion::normalize(): tried an illegal conversion: timestamp to "
+               << out->getColTypes()[i];
+            throw logic_error(os.str());
+          }
+        }
+
+        break;
 
       // case CalpontSystemCatalog::TIME:
       //   switch (out->getColTypes()[i])
