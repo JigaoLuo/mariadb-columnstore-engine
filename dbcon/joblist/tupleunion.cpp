@@ -575,6 +575,104 @@ namespace
     out->setIntField(ival, i);
   }
 
+  void normalizeWideXDecimalToXIntNoScale(const Row& in, Row* out, uint32_t i) 
+  {
+    idbassert(datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)));
+    idbassert(out->getScale(i) == in.getScale(i));
+    int64_t val = 0;
+    int128_t val128 = 0;
+    bool isInputWide = false;
+
+    if (in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+    {
+      in.getInt128Field(i, val128);
+      isInputWide = true;
+    }
+    else
+      val = in.getIntField(i);
+      
+    out->setInt128Field(isInputWide ? val128 : val, i);
+  }
+
+  void normalizeWideXDecimalToXIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  {
+    idbassert(datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)));
+    idbassert(out->getScale(i) > in.getScale(i));
+    int64_t val = 0;
+    int128_t val128 = 0;
+    bool isInputWide = false;
+
+    if (in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+    {
+      in.getInt128Field(i, val128);
+      isInputWide = true;
+    }
+    else
+      val = in.getIntField(i);
+
+    int128_t temp = datatypes::applySignedScale<int128_t>(isInputWide ? val128 : val, out->getScale(i) - in.getScale(i));
+    out->setInt128Field(temp, i);
+  }
+
+  void normalizeXDecimalToXIntNoScale(const Row& in, Row* out, uint32_t i) 
+  {
+    idbassert(!datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)));
+    idbassert(out->getScale(i) == in.getScale(i));
+    idbassert(in.getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
+    int64_t val = in.getIntField(i);
+    out->setIntField(val, i);
+  }
+
+  void normalizeXDecimalToXIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  {
+    idbassert(!datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)));
+    idbassert(out->getScale(i) > in.getScale(i));
+    idbassert(in.getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
+    int64_t val = in.getIntField(i);
+    int64_t temp = datatypes::applySignedScale<int64_t>(val, out->getScale(i) - in.getScale(i));
+    out->setIntField(temp, i);
+  }
+
+  void normalizeXDecimalToXFloat(const Row& in, Row* out, uint32_t i) 
+  {
+    idbassert(in.getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
+    int64_t val = in.getIntField(i);
+    float fval = ((float)val) / IDB_pow[in.getScale(i)];
+    out->setFloatField(fval, i);
+  }
+
+  void normalizeXDecimalToXDouble(const Row& in, Row* out, uint32_t i) 
+  {
+    idbassert(in.getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
+    int64_t val = in.getIntField(i);
+    double dval = ((double)val) / IDB_pow[in.getScale(i)];
+    out->setDoubleField(dval, i);
+  }
+
+  void normalizeXDecimalToLongDouble(const Row& in, Row* out, uint32_t i) 
+  {
+    idbassert(in.getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
+    int64_t val = in.getIntField(i);
+    long double dval = ((long double)val) / IDB_pow[in.getScale(i)];
+    out->setLongDoubleField(dval, i);
+  }
+
+  void normalizeWideXDecimalToString(const Row& in, Row* out, uint32_t i) 
+  {
+    idbassert(in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
+    int128_t val128 = 0;
+    in.getInt128Field(i, val128);
+    datatypes::Decimal dec(0, in.getScale(i), in.getPrecision(i), val128);
+    out->setStringField(dec.toString(), i);
+  }
+
+  void normalizeXDecimalToString(const Row& in, Row* out, uint32_t i) 
+  {
+    idbassert(in.getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
+    int64_t val = in.getIntField(i);
+    datatypes::Decimal dec(val, in.getScale(i), in.getPrecision(i));
+    out->setStringField(dec.toString(), i);
+  }
 
   std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> inferNormalizeFunctions(const Row& in, Row* out)
   {
@@ -1112,113 +1210,71 @@ namespace
         break;
       }
 
-      // case CalpontSystemCatalog::DECIMAL:
-      // case CalpontSystemCatalog::UDECIMAL:
-      // {
-      //   int64_t val = 0;
-      //   int128_t val128 = 0;
-      //   bool isInputWide = false;
+      case CalpontSystemCatalog::DECIMAL:
+      case CalpontSystemCatalog::UDECIMAL:
+      {
+        switch (out->getColTypes()[i])
+        {
+          case CalpontSystemCatalog::TINYINT:
+          case CalpontSystemCatalog::SMALLINT:
+          case CalpontSystemCatalog::MEDINT:
+          case CalpontSystemCatalog::INT:
+          case CalpontSystemCatalog::BIGINT:
+          case CalpontSystemCatalog::UTINYINT:
+          case CalpontSystemCatalog::USMALLINT:
+          case CalpontSystemCatalog::UMEDINT:
+          case CalpontSystemCatalog::UINT:
+          case CalpontSystemCatalog::UBIGINT:
+          case CalpontSystemCatalog::DECIMAL:
+          case CalpontSystemCatalog::UDECIMAL:
+          {
+            if (datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)))
+            {
+              if (out->getScale(i) == in.getScale(i))
+                result.emplace_back(normalizeWideXDecimalToXIntNoScale);
+              else if (out->getScale(i) > in.getScale(i))
+                result.emplace_back(normalizeWideXDecimalToXIntWithScaleInt128);
+              else  // should not happen, the output's scale is the largest
+                throw logic_error("TupleUnion::normalize(): incorrect scale setting");
+            }
+            // If output type is narrow decimal, input type
+            // has to be narrow decimal as well.
+            else
+            {
+              if (out->getScale(i) == in.getScale(i))
+                result.emplace_back(normalizeXDecimalToXIntNoScale);
+              else if (out->getScale(i) > in.getScale(i))
+                result.emplace_back(normalizeXDecimalToXIntWithScaleInt128);
+              else  // should not happen, the output's scale is the largest
+                throw logic_error("TupleUnion::normalize(): incorrect scale setting");
+            }
 
-      //   if (in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-      //   {
-      //     in.getInt128Field(i, val128);
-      //     isInputWide = true;
-      //   }
-      //   else
-      //     val = in.getIntField(i);
+            break;
+          }
 
-      //   uint32_t scale = in.getScale(i);
+          case CalpontSystemCatalog::FLOAT:
+          case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeXDecimalToXFloat); break; 
 
-      //   switch (out->getColTypes()[i])
-      //   {
-      //     case CalpontSystemCatalog::TINYINT:
-      //     case CalpontSystemCatalog::SMALLINT:
-      //     case CalpontSystemCatalog::MEDINT:
-      //     case CalpontSystemCatalog::INT:
-      //     case CalpontSystemCatalog::BIGINT:
-      //     case CalpontSystemCatalog::UTINYINT:
-      //     case CalpontSystemCatalog::USMALLINT:
-      //     case CalpontSystemCatalog::UMEDINT:
-      //     case CalpontSystemCatalog::UINT:
-      //     case CalpontSystemCatalog::UBIGINT:
-      //     case CalpontSystemCatalog::DECIMAL:
-      //     case CalpontSystemCatalog::UDECIMAL:
-      //     {
-      //       if (datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)))
-      //       {
-      //         if (out->getScale(i) == scale)
-      //           out->setInt128Field(isInputWide ? val128 : val, i);
-      //         else if (out->getScale(i) > scale)
-      //         {
-      //           int128_t temp = datatypes::applySignedScale<int128_t>(isInputWide ? val128 : val,
-      //                                                                 out->getScale(i) - scale);
-      //           out->setInt128Field(temp, i);
-      //         }
-      //         else  // should not happen, the output's scale is the largest
-      //           throw logic_error("TupleUnion::normalize(): incorrect scale setting");
-      //       }
-      //       // If output type is narrow decimal, input type
-      //       // has to be narrow decimal as well.
-      //       else
-      //       {
-      //         if (out->getScale(i) == scale)
-      //           out->setIntField(val, i);
-      //         else if (out->getScale(i) > scale)
-      //         {
-      //           int64_t temp = datatypes::applySignedScale<int64_t>(val, out->getScale(i) - scale);
-      //           out->setIntField(temp, i);
-      //         }
-      //         else  // should not happen, the output's scale is the largest
-      //           throw logic_error("TupleUnion::normalize(): incorrect scale setting");
-      //       }
+          case CalpontSystemCatalog::DOUBLE:
+          case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeXDecimalToXDouble); break;
 
-      //       break;
-      //     }
+          case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeXDecimalToLongDouble); break;
 
-      //     case CalpontSystemCatalog::FLOAT:
-      //     case CalpontSystemCatalog::UFLOAT:
-      //     {
-      //       float fval = ((float)val) / IDB_pow[scale];
-      //       out->setFloatField(fval, i);
-      //       break;
-      //     }
+          case CalpontSystemCatalog::CHAR:
+          case CalpontSystemCatalog::TEXT:
+          case CalpontSystemCatalog::VARCHAR:
+          default:
+          {
+            if (LIKELY(in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH))
+              result.emplace_back(normalizeWideXDecimalToString);
+            else
+              result.emplace_back(normalizeXDecimalToString);
+            break;
+          }
+        }
 
-      //     case CalpontSystemCatalog::DOUBLE:
-      //     case CalpontSystemCatalog::UDOUBLE:
-      //     {
-      //       double dval = ((double)val) / IDB_pow[scale];
-      //       out->setDoubleField(dval, i);
-      //       break;
-      //     }
-
-      //     case CalpontSystemCatalog::LONGDOUBLE:
-      //     {
-      //       long double dval = ((long double)val) / IDB_pow[scale];
-      //       out->setLongDoubleField(dval, i);
-      //       break;
-      //     }
-
-      //     case CalpontSystemCatalog::CHAR:
-      //     case CalpontSystemCatalog::TEXT:
-      //     case CalpontSystemCatalog::VARCHAR:
-      //     default:
-      //     {
-      //       if (LIKELY(isInputWide))
-      //       {
-      //         datatypes::Decimal dec(0, in.getScale(i), in.getPrecision(i), val128);
-      //         out->setStringField(dec.toString(), i);
-      //       }
-      //       else
-      //       {
-      //         datatypes::Decimal dec(val, in.getScale(i), in.getPrecision(i));
-      //         out->setStringField(dec.toString(), i);
-      //       }
-      //       break;
-      //     }
-      //   }
-
-      //   break;
-      // }
+        break;
+      }
 
       // case CalpontSystemCatalog::BLOB:
       // case CalpontSystemCatalog::VARBINARY:
