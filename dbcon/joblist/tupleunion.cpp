@@ -401,6 +401,93 @@ namespace
     out->setStringField(d, i);
   }
 
+  void normalizeFloatingPointToIntNoScale(const Row& in, Row* out, uint32_t i) 
+  {
+    double val = (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
+    out->setIntField((int64_t)val, i);
+  }
+
+  void normalizeFloatingPointToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  {
+    double val = (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
+    /* have to pick a scale to use for the double. using 5... */
+    uint32_t scale = 5;
+    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+    const int diff = out->getScale(i) - scale;
+    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
+    out->setInt128Field(ival, i);
+  }
+
+  void normalizeFloatingPointToIntWithScaleInt(const Row& in, Row* out, uint32_t i) 
+  {
+    double val = (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
+    /* have to pick a scale to use for the double. using 5... */
+    uint32_t scale = 5;
+    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+    const int diff = out->getScale(i) - scale;
+    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
+    out->setIntField(ival, i);
+  }
+  
+  void normalizeFloatingPointToUint(const Row& in, Row* out, uint32_t i) 
+  {
+    double val = (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
+    out->setUintField((uint64_t)val, i);
+  }
+
+  void normalizeFloatingPointToXFloat(const Row& in, Row* out, uint32_t i) 
+  {
+    double val = (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
+    out->setFloatField(val, i);
+  }
+
+  void normalizeFloatingPointToXDouble(const Row& in, Row* out, uint32_t i) 
+  {
+    double val = (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
+    out->setDoubleField(val, i);
+  }
+
+  void normalizeFloatingPointToLongDouble(const Row& in, Row* out, uint32_t i) 
+  {
+    double val = (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
+    out->setLongDoubleField(val, i);
+  }
+
+  void normalizeFloatingPointToString(const Row& in, Row* out, uint32_t i) 
+  {
+    double val = (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
+    ostringstream os;
+    os.precision(15);  // to match mysql's output
+    os << val;
+    out->setStringField(os.str(), i);
+  }
+
+  void normalizeFloatingPointToXDecimalWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  {
+    double val = (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
+    /* have to pick a scale to use for the double. using 5... */
+    uint32_t scale = 5;
+    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+    const int diff = out->getScale(i) - scale;
+    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
+    out->setInt128Field(ival, i);
+  }
+
+  void normalizeFloatingPointToXDecimalWithScaleInt(const Row& in, Row* out, uint32_t i) 
+  {
+    double val = (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
+    /* have to pick a scale to use for the double. using 5... */
+    uint32_t scale = 5;
+    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+    const int diff = out->getScale(i) - scale;
+    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
+    out->setIntField(ival, i);
+  }
+
   std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> inferNormalizeFunctions(const Row& in, Row* out)
   {
   uint32_t i;
@@ -801,84 +888,75 @@ namespace
 
         break;
 
-      // case CalpontSystemCatalog::FLOAT:
-      // case CalpontSystemCatalog::UFLOAT:
-      // case CalpontSystemCatalog::DOUBLE:
-      // case CalpontSystemCatalog::UDOUBLE:
-      // {
-      //   double val =
-      //       (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT ? in.getFloatField(i) : in.getDoubleField(i));
+        case CalpontSystemCatalog::FLOAT:
+        case CalpontSystemCatalog::UFLOAT:
+        case CalpontSystemCatalog::DOUBLE:
+        case CalpontSystemCatalog::UDOUBLE:
+        {
+          switch (out->getColTypes()[i])
+          {
+            case CalpontSystemCatalog::TINYINT:
+            case CalpontSystemCatalog::SMALLINT:
+            case CalpontSystemCatalog::MEDINT:
+            case CalpontSystemCatalog::INT:
+            case CalpontSystemCatalog::BIGINT:
+            {
+              if (out->getScale(i))
+              {
+                if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+                  result.emplace_back(normalizeFloatingPointToIntWithScaleInt128);
+                else
+                  result.emplace_back(normalizeFloatingPointToIntWithScaleInt);
+              } 
+              else
+                result.emplace_back(normalizeFloatingPointToIntNoScale); 
+              break;
+            }
 
-      //   switch (out->getColTypes()[i])
-      //   {
-      //     case CalpontSystemCatalog::TINYINT:
-      //     case CalpontSystemCatalog::SMALLINT:
-      //     case CalpontSystemCatalog::MEDINT:
-      //     case CalpontSystemCatalog::INT:
-      //     case CalpontSystemCatalog::BIGINT:
-      //       if (out->getScale(i))
-      //         goto dec3;
+          case CalpontSystemCatalog::UTINYINT:
+          case CalpontSystemCatalog::USMALLINT:
+          case CalpontSystemCatalog::UMEDINT:
+          case CalpontSystemCatalog::UINT:
+          case CalpontSystemCatalog::UBIGINT: result.emplace_back(normalizeFloatingPointToUint); break;
 
-      //       out->setIntField((int64_t)val, i);
-      //       break;
+          case CalpontSystemCatalog::FLOAT:
+          case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeFloatingPointToXFloat); break;
 
-      //     case CalpontSystemCatalog::UTINYINT:
-      //     case CalpontSystemCatalog::USMALLINT:
-      //     case CalpontSystemCatalog::UMEDINT:
-      //     case CalpontSystemCatalog::UINT:
-      //     case CalpontSystemCatalog::UBIGINT: out->setUintField((uint64_t)val, i); break;
+          case CalpontSystemCatalog::DOUBLE:
+          case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeFloatingPointToXDouble); break;
 
-      //     case CalpontSystemCatalog::FLOAT:
-      //     case CalpontSystemCatalog::UFLOAT: out->setFloatField(val, i); break;
+          case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeFloatingPointToLongDouble); break;
 
-      //     case CalpontSystemCatalog::DOUBLE:
-      //     case CalpontSystemCatalog::UDOUBLE: out->setDoubleField(val, i); break;
+          case CalpontSystemCatalog::CHAR:
+          case CalpontSystemCatalog::TEXT:
+          case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeFloatingPointToString); break;
+          
+          case CalpontSystemCatalog::DECIMAL:
+          case CalpontSystemCatalog::UDECIMAL:
+          {
+            // xFLOAT or xDOUBLE to xDECIMAL conversion. Is it really possible?
+            // TODO:
+            // Perhaps we should add an assert here that this combination is not possible
+            // In the current reduction all problems mentioned in the code under
+            //  case "Signed INT to XDecimal" are also applicable here.
+            // TODO: isn't overflow possible below?
+            if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+              result.emplace_back(normalizeFloatingPointToXDecimalWithScaleInt128);
+            else
+              result.emplace_back(normalizeFloatingPointToXDecimalWithScaleInt);
+            
+            break;
+          }
 
-      //     case CalpontSystemCatalog::LONGDOUBLE: out->setLongDoubleField(val, i); break;
+          default:
+            ostringstream os;
+            os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
+               << out->getColTypes()[i];
+            throw logic_error(os.str());
+        }
 
-      //     case CalpontSystemCatalog::CHAR:
-      //     case CalpontSystemCatalog::TEXT:
-      //     case CalpontSystemCatalog::VARCHAR:
-      //     {
-      //       ostringstream os;
-      //       os.precision(15);  // to match mysql's output
-      //       os << val;
-      //       out->setStringField(os.str(), i);
-      //       break;
-      //     }
-
-      //     case CalpontSystemCatalog::DECIMAL:
-      //     case CalpontSystemCatalog::UDECIMAL:
-      //     {
-      //     dec3: /* have to pick a scale to use for the double. using 5... */
-      //       uint32_t scale = 5;
-      //       uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-      //       int diff = out->getScale(i) - scale;
-      //       // xFLOAT or xDOUBLE to xDECIMAL conversion. Is it really possible?
-      //       // TODO:
-      //       // Perhaps we should add an assert here that this combination is not possible
-      //       // In the current reduction all problems mentioned in the code under
-      //       //  label "dec1:" are also applicable here.
-      //       // TODO: isn't overflow possible below?
-      //       ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-
-      //       if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-      //         out->setInt128Field(ival, i);
-      //       else
-      //         out->setIntField(ival, i);
-
-      //       break;
-      //     }
-
-      //     default:
-      //       ostringstream os;
-      //       os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
-      //          << out->getColTypes()[i];
-      //       throw logic_error(os.str());
-      //   }
-
-      //   break;
-      // }
+        break;
+      }
 
       // case CalpontSystemCatalog::LONGDOUBLE:
       // {
