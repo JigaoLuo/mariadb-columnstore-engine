@@ -258,35 +258,35 @@ namespace
     out->setUintField(date, i);
   }
 
-  // void normalizeDateToTimestamp(const Row& in, Row* out, uint32_t i) 
-  // {
-  //   dataconvert::Date date(in.getUintField(i));
-  //   dataconvert::MySQLTime m_time;
-  //   m_time.year = date.year;
-  //   m_time.month = date.month;
-  //   m_time.day = date.day;
-  //   m_time.hour = 0;
-  //   m_time.minute = 0;
-  //   m_time.second = 0;
-  //   m_time.second_part = 0;
+  void normalizeDateToTimestamp(const Row& in, Row* out, uint32_t i, long fTimeZone) 
+  {
+    dataconvert::Date date(in.getUintField(i));
+    dataconvert::MySQLTime m_time;
+    m_time.year = date.year;
+    m_time.month = date.month;
+    m_time.day = date.day;
+    m_time.hour = 0;
+    m_time.minute = 0;
+    m_time.second = 0;
+    m_time.second_part = 0;
 
-  //   dataconvert::TimeStamp timeStamp;
-  //   bool isValid = true;
-  //   int64_t seconds = dataconvert::mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
+    dataconvert::TimeStamp timeStamp;
+    bool isValid = true;
+    int64_t seconds = dataconvert::mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
 
-  //   if (!isValid)
-  //   {
-  //     timeStamp.reset();
-  //   }
-  //   else
-  //   {
-  //     timeStamp.second = seconds;
-  //     timeStamp.msecond = m_time.second_part;
-  //   }
+    if (!isValid)
+    {
+      timeStamp.reset();
+    }
+    else
+    {
+      timeStamp.second = seconds;
+      timeStamp.msecond = m_time.second_part;
+    }
 
-  //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
-  //   out->setUintField(outValue, i);
-  // }
+    uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
+    out->setUintField(outValue, i);
+  }
 
   void normalizeDateToString(const Row& in, Row* out, uint32_t i) 
   {
@@ -306,37 +306,37 @@ namespace
     out->setUintField(val, i);
   }
 
-  // void normalizeDatetimeToTimestamp(const Row& in, Row* out, uint32_t i) 
-  // {
-  //   uint64_t val = in.getUintField(i);
-  //   dataconvert::DateTime dtime(val);
-  //   dataconvert::MySQLTime m_time;
-  //   dataconvert::TimeStamp timeStamp;
+  void normalizeDatetimeToTimestamp(const Row& in, Row* out, uint32_t i, long fTimeZone) 
+  {
+    uint64_t val = in.getUintField(i);
+    dataconvert::DateTime dtime(val);
+    dataconvert::MySQLTime m_time;
+    dataconvert::TimeStamp timeStamp;
 
-  //   m_time.year = dtime.year;
-  //   m_time.month = dtime.month;
-  //   m_time.day = dtime.day;
-  //   m_time.hour = dtime.hour;
-  //   m_time.minute = dtime.minute;
-  //   m_time.second = dtime.second;
-  //   m_time.second_part = dtime.msecond;
+    m_time.year = dtime.year;
+    m_time.month = dtime.month;
+    m_time.day = dtime.day;
+    m_time.hour = dtime.hour;
+    m_time.minute = dtime.minute;
+    m_time.second = dtime.second;
+    m_time.second_part = dtime.msecond;
 
-  //   bool isValid = true;
-  //   int64_t seconds = mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
+    bool isValid = true;
+    int64_t seconds = mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
 
-  //   if (!isValid)
-  //   {
-  //     timeStamp.reset();
-  //   }
-  //   else
-  //   {
-  //     timeStamp.second = seconds;
-  //     timeStamp.msecond = m_time.second_part;
-  //   }
+    if (!isValid)
+    {
+      timeStamp.reset();
+    }
+    else
+    {
+      timeStamp.second = seconds;
+      timeStamp.msecond = m_time.second_part;
+    }
 
-  //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
-  //   out->setUintField(outValue, i);
-  // }
+    uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
+    out->setUintField(outValue, i);
+  }
 
   void normalizeDatetimeToString(const Row& in, Row* out, uint32_t i) 
   {
@@ -349,46 +349,46 @@ namespace
     out->setIntField(in.getIntField(i), i);
   }
 
-  // void normalizeTimestampToDateX(const Row& in, Row* out, uint32_t i) 
-  // {
-  //   uint64_t val = in.getUintField(i);
-  //   dataconvert::TimeStamp timestamp(val);
-  //   int64_t seconds = timestamp.second;
-  //   uint64_t outValue;
+  void normalizeTimestampToDateX(const Row& in, Row* out, uint32_t i, long fTimeZone) 
+  {
+    uint64_t val = in.getUintField(i);
+    dataconvert::TimeStamp timestamp(val);
+    int64_t seconds = timestamp.second;
+    uint64_t outValue;
 
-  //   dataconvert::MySQLTime time;
-  //   dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
+    dataconvert::MySQLTime time;
+    dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
 
-  //   if (out->getColTypes()[i] == CalpontSystemCatalog::DATE)
-  //   {
-  //     dataconvert::Date date;
-  //     date.year = time.year;
-  //     date.month = time.month;
-  //     date.day = time.day;
-  //     date.spare = 0;
-  //     outValue = (uint32_t) * (reinterpret_cast<uint32_t*>(&date));
-  //   }
-  //   else
-  //   {
-  //     dataconvert::DateTime datetime;
-  //     datetime.year = time.year;
-  //     datetime.month = time.month;
-  //     datetime.day = time.day;
-  //     datetime.hour = time.hour;
-  //     datetime.minute = time.minute;
-  //     datetime.second = time.second;
-  //     datetime.msecond = timestamp.msecond;
-  //     outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&datetime));
-  //   }
+    if (out->getColTypes()[i] == CalpontSystemCatalog::DATE)
+    {
+      dataconvert::Date date;
+      date.year = time.year;
+      date.month = time.month;
+      date.day = time.day;
+      date.spare = 0;
+      outValue = (uint32_t) * (reinterpret_cast<uint32_t*>(&date));
+    }
+    else
+    {
+      dataconvert::DateTime datetime;
+      datetime.year = time.year;
+      datetime.month = time.month;
+      datetime.day = time.day;
+      datetime.hour = time.hour;
+      datetime.minute = time.minute;
+      datetime.second = time.second;
+      datetime.msecond = timestamp.msecond;
+      outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&datetime));
+    }
 
-  //   out->setUintField(outValue, i);
-  // }
+    out->setUintField(outValue, i);
+  }
 
-  // void normalizeTimestampToString(const Row& in, Row* out, uint32_t i) 
-  // {
-  //   string d = DataConvert::timestampToString(in.getUintField(i), fTimeZone);
-  //   out->setStringField(d, i);
-  // }
+  void normalizeTimestampToString(const Row& in, Row* out, uint32_t i, long fTimeZone) 
+  {
+    string d = DataConvert::timestampToString(in.getUintField(i), fTimeZone);
+    out->setStringField(d, i);
+  }
 
   void normalizeTimeToTime(const Row& in, Row* out, uint32_t i) 
   {
@@ -680,7 +680,7 @@ namespace
     out->setVarBinaryField(in.getVarBinaryField(i), in.getVarBinaryLength(i), i);
   }
 
-  std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> inferNormalizeFunctions(const Row& in, Row* out)
+  std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> inferNormalizeFunctions(const Row& in, Row* out, long fTimeZone)
   {
     uint32_t i;
     std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> result;
@@ -888,38 +888,7 @@ namespace
 
             case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeDateToDatetime); break;
 
-            // case CalpontSystemCatalog::TIMESTAMP:
-            // {
-            //   dataconvert::Date date(in.getUintField(i));
-            //   dataconvert::MySQLTime m_time;
-            //   m_time.year = date.year;
-            //   m_time.month = date.month;
-            //   m_time.day = date.day;
-            //   m_time.hour = 0;
-            //   m_time.minute = 0;
-            //   m_time.second = 0;
-            //   m_time.second_part = 0;
-
-            //   dataconvert::TimeStamp timeStamp;
-            //   bool isValid = true;
-            //   int64_t seconds = dataconvert::mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
-
-            //   if (!isValid)
-            //   {
-            //     timeStamp.reset();
-            //   }
-            //   else
-            //   {
-            //     timeStamp.second = seconds;
-            //     timeStamp.msecond = m_time.second_part;
-            //   }
-
-            //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
-            //   out->setUintField(outValue, i);
-            //   break;
-            // }
-
-            // case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeDateToTimestamp); break;
+            case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(std::bind(normalizeDateToTimestamp, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, fTimeZone)); break;
 
             case CalpontSystemCatalog::CHAR:
             case CalpontSystemCatalog::TEXT:
@@ -942,40 +911,7 @@ namespace
 
             case CalpontSystemCatalog::DATE: result.emplace_back(normalizeDatetimeToDate); break;
 
-            // case CalpontSystemCatalog::TIMESTAMP:
-            // {
-            //   uint64_t val = in.getUintField(i);
-            //   dataconvert::DateTime dtime(val);
-            //   dataconvert::MySQLTime m_time;
-            //   dataconvert::TimeStamp timeStamp;
-
-            //   m_time.year = dtime.year;
-            //   m_time.month = dtime.month;
-            //   m_time.day = dtime.day;
-            //   m_time.hour = dtime.hour;
-            //   m_time.minute = dtime.minute;
-            //   m_time.second = dtime.second;
-            //   m_time.second_part = dtime.msecond;
-
-            //   bool isValid = true;
-            //   int64_t seconds = mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
-
-            //   if (!isValid)
-            //   {
-            //     timeStamp.reset();
-            //   }
-            //   else
-            //   {
-            //     timeStamp.second = seconds;
-            //     timeStamp.msecond = m_time.second_part;
-            //   }
-
-            //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
-            //   out->setUintField(outValue, i);
-            //   break;
-            // }
-
-            // case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeDatetimeToTimestamp); break;
+            case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(std::bind(normalizeDatetimeToTimestamp, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, fTimeZone)); break;
 
             case CalpontSystemCatalog::CHAR:
             case CalpontSystemCatalog::TEXT:
@@ -997,58 +933,12 @@ namespace
           {
             case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeTimestampToTimestamp); break;
 
-            // case CalpontSystemCatalog::DATE:
-            // case CalpontSystemCatalog::DATETIME:
-            // {
-            //   uint64_t val = in.getUintField(i);
-            //   dataconvert::TimeStamp timestamp(val);
-            //   int64_t seconds = timestamp.second;
-            //   uint64_t outValue;
-
-            //   dataconvert::MySQLTime time;
-            //   dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
-
-            //   if (out->getColTypes()[i] == CalpontSystemCatalog::DATE)
-            //   {
-            //     dataconvert::Date date;
-            //     date.year = time.year;
-            //     date.month = time.month;
-            //     date.day = time.day;
-            //     date.spare = 0;
-            //     outValue = (uint32_t) * (reinterpret_cast<uint32_t*>(&date));
-            //   }
-            //   else
-            //   {
-            //     dataconvert::DateTime datetime;
-            //     datetime.year = time.year;
-            //     datetime.month = time.month;
-            //     datetime.day = time.day;
-            //     datetime.hour = time.hour;
-            //     datetime.minute = time.minute;
-            //     datetime.second = time.second;
-            //     datetime.msecond = timestamp.msecond;
-            //     outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&datetime));
-            //   }
-
-            //   out->setUintField(outValue, i);
-            //   break;
-            // }
-
-            // case CalpontSystemCatalog::DATE:
-            // case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeTimestampToDateX); break;
-
-            // case CalpontSystemCatalog::CHAR:
-            // case CalpontSystemCatalog::TEXT:
-            // case CalpontSystemCatalog::VARCHAR:
-            // {
-            //   string d = DataConvert::timestampToString(in.getUintField(i), fTimeZone);
-            //   out->setStringField(d, i);
-            //   break;
-            // }
+            case CalpontSystemCatalog::DATE:
+            case CalpontSystemCatalog::DATETIME: result.emplace_back(std::bind(normalizeTimestampToDateX, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, fTimeZone)); break;
             
-            // case CalpontSystemCatalog::CHAR:
-            // case CalpontSystemCatalog::TEXT:
-            // case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeTimestampToString); break;
+            case CalpontSystemCatalog::CHAR:
+            case CalpontSystemCatalog::TEXT:
+            case CalpontSystemCatalog::VARCHAR: result.emplace_back(std::bind(normalizeTimestampToString, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, fTimeZone)); break;
 
             default:
             {
@@ -1463,7 +1353,7 @@ void TupleUnion::readInput(uint32_t which)
         l_tmpRG.getRow(0, &tmpRow);
         l_tmpRG.setRowCount(l_inputRG.getRowCount());
 
-        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &tmpRow);
+        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &tmpRow, fTimeZone);
         for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow(), tmpRow.nextRow())
           normalize(inRow, &tmpRow, normalizeFunctions);
 
@@ -1513,7 +1403,7 @@ void TupleUnion::readInput(uint32_t which)
       }
       else
       {
-        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &outRow);
+        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &outRow, fTimeZone);
         const uint32_t inputRGRowCount = l_inputRG.getRowCount();
         uint32_t tmpOutputRowCount = l_outputRG.getRowCount();
 
