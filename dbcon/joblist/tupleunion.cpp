@@ -69,7 +69,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
     int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
     out->setInt128Field(val, i);
   }
@@ -78,7 +77,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
     out->setIntField(val, i);
   }
@@ -92,7 +90,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
     int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
     out->setInt128Field(val, i);
   }
@@ -101,7 +98,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
     out->setIntField(val, i);
   }
@@ -145,7 +141,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
     int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
     out->setInt128Field(val, i);
   }
@@ -154,7 +149,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
     out->setIntField(val, i);
   }
@@ -168,7 +162,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
     int128_t val = datatypes::applySignedScale<int128_t>(in.getUintField(i), diff);
     out->setInt128Field(val, i);
   }
@@ -177,7 +170,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     uint64_t val = datatypes::applySignedScale<uint64_t>(in.getUintField(i), diff);
     out->setUintField(val, i);
   }
@@ -226,7 +218,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
     int128_t val = datatypes::applySignedScale<int128_t>(in.getUintField(i), diff);
     out->setInt128Field(val, i);
   }
@@ -235,7 +226,6 @@ namespace
   {
     const int diff = out->getScale(i) - in.getScale(i);
     idbassert(diff >= 0);
-    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     uint64_t val = datatypes::applySignedScale<uint64_t>(in.getUintField(i), diff);
     out->setUintField(val, i);
   }
@@ -415,7 +405,6 @@ namespace
     uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
     const int diff = out->getScale(i) - scale;
     ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
     out->setInt128Field(ival, i);
   }
 
@@ -427,7 +416,6 @@ namespace
     uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
     const int diff = out->getScale(i) - scale;
     ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     out->setIntField(ival, i);
   }
   
@@ -472,7 +460,6 @@ namespace
     uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
     const int diff = out->getScale(i) - scale;
     ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
     out->setInt128Field(ival, i);
   }
 
@@ -484,7 +471,6 @@ namespace
     uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
     const int diff = out->getScale(i) - scale;
     ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     out->setIntField(ival, i);
   }
 
@@ -502,7 +488,6 @@ namespace
     uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
     int diff = out->getScale(i) - scale;
     ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
     out->setInt128Field(ival, i);
   }
 
@@ -514,7 +499,6 @@ namespace
     uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
     int diff = out->getScale(i) - scale;
     ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     out->setIntField(ival, i);
   }
 
@@ -559,7 +543,6 @@ namespace
     uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
     int diff = out->getScale(i) - scale;
     ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    idbassert(out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
     out->setInt128Field(ival, i);
   }
 
@@ -571,14 +554,11 @@ namespace
     uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
     int diff = out->getScale(i) - scale;
     ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    idbassert(out->getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     out->setIntField(ival, i);
   }
 
   void normalizeWideXDecimalToXIntNoScale(const Row& in, Row* out, uint32_t i) 
   {
-    idbassert(datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)));
-    idbassert(out->getScale(i) == in.getScale(i));
     int64_t val = 0;
     int128_t val128 = 0;
     bool isInputWide = false;
@@ -596,8 +576,6 @@ namespace
 
   void normalizeWideXDecimalToXIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
   {
-    idbassert(datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)));
-    idbassert(out->getScale(i) > in.getScale(i));
     int64_t val = 0;
     int128_t val128 = 0;
     bool isInputWide = false;
@@ -616,18 +594,12 @@ namespace
 
   void normalizeXDecimalToXIntNoScale(const Row& in, Row* out, uint32_t i) 
   {
-    idbassert(!datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)));
-    idbassert(out->getScale(i) == in.getScale(i));
-    idbassert(in.getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     int64_t val = in.getIntField(i);
     out->setIntField(val, i);
   }
 
   void normalizeXDecimalToXIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
   {
-    idbassert(!datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)));
-    idbassert(out->getScale(i) > in.getScale(i));
-    idbassert(in.getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     int64_t val = in.getIntField(i);
     int64_t temp = datatypes::applySignedScale<int64_t>(val, out->getScale(i) - in.getScale(i));
     out->setIntField(temp, i);
@@ -635,7 +607,6 @@ namespace
 
   void normalizeXDecimalToXFloat(const Row& in, Row* out, uint32_t i) 
   {
-    idbassert(in.getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     int64_t val = in.getIntField(i);
     float fval = ((float)val) / IDB_pow[in.getScale(i)];
     out->setFloatField(fval, i);
@@ -643,7 +614,6 @@ namespace
 
   void normalizeXDecimalToXDouble(const Row& in, Row* out, uint32_t i) 
   {
-    idbassert(in.getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     int64_t val = in.getIntField(i);
     double dval = ((double)val) / IDB_pow[in.getScale(i)];
     out->setDoubleField(dval, i);
@@ -651,7 +621,6 @@ namespace
 
   void normalizeXDecimalToLongDouble(const Row& in, Row* out, uint32_t i) 
   {
-    idbassert(in.getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     int64_t val = in.getIntField(i);
     long double dval = ((long double)val) / IDB_pow[in.getScale(i)];
     out->setLongDoubleField(dval, i);
@@ -659,7 +628,6 @@ namespace
 
   void normalizeWideXDecimalToString(const Row& in, Row* out, uint32_t i) 
   {
-    idbassert(in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH);
     int128_t val128 = 0;
     in.getInt128Field(i, val128);
     datatypes::Decimal dec(0, in.getScale(i), in.getPrecision(i), val128);
@@ -668,7 +636,6 @@ namespace
 
   void normalizeXDecimalToString(const Row& in, Row* out, uint32_t i) 
   {
-    idbassert(in.getColumnWidth(i) != datatypes::MAXDECIMALWIDTH);
     int64_t val = in.getIntField(i);
     datatypes::Decimal dec(val, in.getScale(i), in.getPrecision(i));
     out->setStringField(dec.toString(), i);
