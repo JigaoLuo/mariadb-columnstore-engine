@@ -992,7 +992,7 @@ namespace
               if (!isValid)
                 result.emplace_back(normalizeDatetimeToTimestampInvalid);
               else 
-                result.emplace_back(std::bind(normalizeDateToTimestampValid, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, seconds, m_time.second_part));
+                result.emplace_back(std::bind(normalizeDatetimeToTimestampValid, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, seconds, m_time.second_part));
               break;
             }
 
