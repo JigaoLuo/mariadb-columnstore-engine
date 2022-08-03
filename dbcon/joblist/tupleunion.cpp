@@ -1561,14 +1561,45 @@ void TupleUnion::readInput(uint32_t which)
       }
       else
       {
-        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &outRow, fTimeZone);
+        const std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &outRow, fTimeZone);
         const uint32_t inputRGRowCount = l_inputRG.getRowCount();
         uint32_t tmpOutputRowCount = l_outputRG.getRowCount();
 
-        for (uint32_t i = 0; i < inputRGRowCount; i++, inRow.nextRow())
         {
-          normalize(inRow, &outRow, normalizeFunctions);
-          addToOutput(&outRow, &l_outputRG, false, outRGData, tmpOutputRowCount);
+          /// COMMENT: Itertion all columns.
+          for (uint32_t columnId = 0; columnId < outRow.getColumnCount(); columnId++)
+          {
+            /// COMMENT: Itertion all elements in this current column.
+            for (uint32_t i = 0; i < inputRGRowCount; i++, inRow.nextRow())
+            {
+              {
+                /// COMMENT: Normalize one element of this current column. No need to have an additional normalize function call.
+                if (inRow.isNullValue(columnId))
+                  TupleUnion::writeNull(&outRow, columnId);
+                else
+                  normalizeFunctions[columnId](inRow, &outRow, columnId);
+              }
+
+              /// COMMENT: Add to output in a new vectorized way.
+              addToOutputVec(&outRow, &l_outputRG, false, outRGData, tmpOutputRowCount, columnId == outRow.getColumnCount() - 1);
+
+              /// COMMENT: tmpOutputRowCount is set to 8192, **only when** 8192 elements of the current column are processd **and** the current column is not the last one. 
+              ///          Then we need to switch to the next column with BREAK, because the batch can only contain no more than 8192 tuples.
+              if (UNLIKELY(tmpOutputRowCount == 8192))
+              {
+                break;
+              }
+            }
+            
+            /// COMMENT: If the current column is not the last one, we need to move the handle back to process the next column.
+            if (columnId != outRow.getColumnCount() - 1) 
+            {
+              tmpOutputRowCount = 0;
+              inRow.prevRow(inRow.getSize(), std::min<uint32_t>(8192, inputRGRowCount));
+              outRow.prevRow(outRow.getSize(), std::min<uint32_t>(8192, inputRGRowCount));
+            }
+
+          }
         }
 
         fRowsReturned += inputRGRowCount;
@@ -1699,6 +1730,30 @@ void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit, RGData& data, ui
     rg->setData(&data);
     rg->resetRowGroup(0);
     rg->getRow(0, r);
+    tmpOutputRowCount = 0;
+
+    if (keepit)
+      rowMemory.push_back(data);
+  }
+}
+
+void TupleUnion::addToOutputVec(Row* outRow, RowGroup* outputRG, bool keepit, RGData& data, uint32_t& tmpOutputRowCount, bool isTheLastColumn)
+{
+  outRow->nextRow();
+  ++tmpOutputRowCount;
+
+  /// COMMENT: Insert this batch to output, **only when** the last column is processed. 
+  if (UNLIKELY(isTheLastColumn && tmpOutputRowCount == 8192))
+  {
+    outputRG->setRowCount(8192);
+    {
+      boost::mutex::scoped_lock lock(sMutex);
+      output->insert(data);
+    }
+    data = RGData(*outputRG);
+    outputRG->setData(&data);
+    outputRG->resetRowGroup(0);
+    outputRG->getRow(0, outRow);
     tmpOutputRowCount = 0;
 
     if (keepit)
