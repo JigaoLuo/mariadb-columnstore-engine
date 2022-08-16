@@ -26,7 +26,9 @@ SELECT * FROM (SELECT a FROM t1 UNION SELECT b FROM t1) tu ORDER BY a;
 SELECT * FROM (SELECT b FROM t1 UNION SELECT a FROM t1) tu ORDER BY b;
 DROP TABLE t1;
 
-# Same Int Type Union 
+--echo #
+--echo # Same Int Type Union
+--echo #
 
 CREATE TABLE t1 (a INT UNSIGNED, b INT UNSIGNED);
 INSERT INTO t1 VALUES (1, 1), (1, 1), (2, 1), (2, 1), (3, 2), (4, 2), (5, 2);
@@ -42,7 +44,9 @@ SELECT * FROM (SELECT b FROM t1 UNION SELECT a FROM t1) tu ORDER BY b;
 SELECT * FROM (SELECT * FROM t1 UNION SELECT * FROM t1) tu;
 DROP TABLE t1;
 
-# Signed Int Union 
+--echo #
+--echo # Signed Int Union
+--echo #
 
 CREATE TABLE t1 (a TINYINT);
 INSERT INTO t1 VALUES (CAST(0xFFFFFFFFFFFFFF80 AS SIGNED)+2),(-1),(0),(1),(0x7F);
