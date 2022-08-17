@@ -2984,12 +2984,27 @@ void DataConvert::joinColTypeForUnion(datatypes::SystemCatalog::TypeHolderStd& u
             break;
           }
 
-          if (type.colWidth > unionedType.colWidth)
+          if (type.colDataType == unionedType.colDataType)
           {
-            unionedType.colDataType = type.colDataType;
-            unionedType.colWidth = type.colWidth;
+            // No handling. Fallthrough.
           }
-
+          else if (sameSignednessInteger(unionedType.colDataType, type.colDataType))
+          {
+            // Keep the signedness on the larger data type.
+            if (type.colWidth > unionedType.colWidth)
+            {
+              unionedType.colDataType = type.colDataType;
+              unionedType.colWidth = type.colWidth;
+            }
+          }
+          else if (differentSignednessInteger(unionedType.colDataType, type.colDataType))
+          {
+            // unionedType must be signed integer with upcasted size to prevent overflow & underflow.
+            if (type.colWidth > unionedType.colWidth)
+              unionedType.colWidth = type.colWidth;
+            upcastSignedInteger(unionedType.colDataType, unionedType.colWidth);
+          }
+          else
           // If same size but different signedness
           if (type.colWidth == unionedType.colWidth &&
               ((!isUnsigned(unionedType.colDataType) && isUnsigned(type.colDataType)) ||
