@@ -532,39 +532,45 @@ inline bool differentSignednessInteger(const datatypes::SystemCatalog::ColDataTy
 
 inline void upcastSignedInteger(datatypes::SystemCatalog::ColDataType& type, int32_t& colWidth)
 {
-  switch (colWidth)
+  switch (type)
   {
-    case 1:
+    case datatypes::SystemCatalog::TINYINT:
+    case datatypes::SystemCatalog::UTINYINT:
     {
       type = datatypes::SystemCatalog::SMALLINT;
       colWidth = 2;
       return;
     }
-    case 2:
+    case datatypes::SystemCatalog::SMALLINT:
+    case datatypes::SystemCatalog::USMALLINT:
     {
       type = datatypes::SystemCatalog::MEDINT;
-      colWidth = 3;
+      colWidth = 4;
       return;
     }
-    case 3:
+    case datatypes::SystemCatalog::MEDINT:
+    case datatypes::SystemCatalog::UMEDINT:
     {
       type = datatypes::SystemCatalog::INT;
       colWidth = 4;
       return;
     }
-    case 4:
+    case datatypes::SystemCatalog::INT:
+    case datatypes::SystemCatalog::UINT:
     {
       type = datatypes::SystemCatalog::BIGINT;
       colWidth = 8;
       return;
     }
-    case 8:
+    case datatypes::SystemCatalog::BIGINT:
+    case datatypes::SystemCatalog::UBIGINT:
     {
       type = datatypes::SystemCatalog::BIGINT;
+      colWidth = 8;
       return;
     } 
 
-    default: return;
+    default: idbassert(0); throw std::logic_error("datatypes::upcastSignedInteger: bad data type");
   }
 }
 
