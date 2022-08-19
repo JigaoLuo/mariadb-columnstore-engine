@@ -3001,7 +3001,7 @@ void DataConvert::joinColTypeForUnion(datatypes::SystemCatalog::TypeHolderStd& u
           {
             // unionedType must be signed integer with upcasted size to prevent overflow & underflow.
             if (type.colWidth > unionedType.colWidth)
-              unionedType.colWidth = type.colWidth;
+              unionedType.colDataType = type.colDataType;
             upcastSignedInteger(unionedType.colDataType, unionedType.colWidth);
           }
           else
