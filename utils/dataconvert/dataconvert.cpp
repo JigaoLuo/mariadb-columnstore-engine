@@ -3004,20 +3004,8 @@ void DataConvert::joinColTypeForUnion(datatypes::SystemCatalog::TypeHolderStd& u
               unionedType.colDataType = type.colDataType;
             upcastSignedInteger(unionedType.colDataType, unionedType.colWidth);
           }
-          else
-          // If same size but different signedness
-          if (type.colWidth == unionedType.colWidth &&
-              ((!isUnsigned(unionedType.colDataType) && isUnsigned(type.colDataType)) ||
-               (!isUnsigned(type.colDataType) && isUnsigned(unionedType.colDataType))))
-          {
-            unionedType.colDataType = datatypes::SystemCatalog::DECIMAL;
-            unionedType.colWidth = datatypes::Decimal::isWideDecimalTypeByPrecision(unionedType.precision)
-                                       ? datatypes::MAXDECIMALWIDTH
-                                       : datatypes::MAXLEGACYWIDTH;
-          }
 
-          if (type.colDataType == datatypes::SystemCatalog::DECIMAL ||
-              type.colDataType == datatypes::SystemCatalog::UDECIMAL)
+          if (isDecimal(type.colDataType))
           {
             unionedType.colDataType = datatypes::SystemCatalog::DECIMAL;
           }
