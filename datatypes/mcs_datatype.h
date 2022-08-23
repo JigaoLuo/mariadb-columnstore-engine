@@ -565,8 +565,8 @@ inline void upcastSignedInteger(datatypes::SystemCatalog::ColDataType& type, int
     case datatypes::SystemCatalog::BIGINT:
     case datatypes::SystemCatalog::UBIGINT:
     {
-      type = datatypes::SystemCatalog::BIGINT;
-      colWidth = 8;
+      type = datatypes::SystemCatalog::DECIMAL;
+      colWidth = 16;
       return;
     } 
 
