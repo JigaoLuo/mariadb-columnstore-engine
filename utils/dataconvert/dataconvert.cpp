@@ -2986,7 +2986,8 @@ void DataConvert::joinColTypeForUnion(datatypes::SystemCatalog::TypeHolderStd& u
 
           if (type.colDataType == unionedType.colDataType)
           {
-            // No handling. Fallthrough.
+            if (type.colWidth > unionedType.colWidth)
+              unionedType.colWidth = type.colWidth;
           }
           else if (sameSignednessInteger(unionedType.colDataType, type.colDataType))
           {
@@ -3002,7 +3003,7 @@ void DataConvert::joinColTypeForUnion(datatypes::SystemCatalog::TypeHolderStd& u
             // unionedType must be signed integer with upcasted size to prevent overflow & underflow.
             if (type.colWidth > unionedType.colWidth)
               unionedType.colDataType = type.colDataType;
-            upcastSignedInteger(unionedType.colDataType, unionedType.colWidth);
+            promoteSignedInteger(unionedType);
           }
 
           if (isDecimal(type.colDataType))

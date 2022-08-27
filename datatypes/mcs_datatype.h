@@ -527,7 +527,7 @@ inline bool differentSignednessInteger(const datatypes::SystemCatalog::ColDataTy
   return (isSignedInteger(type1) && isUnsignedInteger(type2)) || (isUnsignedInteger(type1) && isSignedInteger(type2));
 }
 
-inline void upcastSignedInteger(datatypes::SystemCatalog::TypeHolderStd& unionedType)
+inline void promoteSignedInteger(datatypes::SystemCatalog::TypeHolderStd& unionedType)
 {
   switch (unionedType.colDataType)
   {
@@ -563,7 +563,7 @@ inline void upcastSignedInteger(datatypes::SystemCatalog::TypeHolderStd& unioned
     case datatypes::SystemCatalog::UBIGINT:
     {
       unionedType.colDataType = datatypes::SystemCatalog::DECIMAL;
-      unionedType.colWidth = 16;
+      unionedType.colWidth = MAXDECIMALWIDTH;
       unionedType.precision = datatypes::INT128MAXPRECISION;
       unionedType.scale = 0;
       return;
