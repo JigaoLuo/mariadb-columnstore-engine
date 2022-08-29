@@ -1565,12 +1565,18 @@ void TupleUnion::readInput(uint32_t which)
         uint32_t tmpOutputRowCount = l_outputRG.getRowCount();
 
         {
+          uint32_t columnId = 0;
+          uint32_t rowId = 0;
+          bool gobackFlag = false;
+          uint32_t rowIdGoback = 0;
           /// COMMENT: Itertion all columns.
-          for (uint32_t columnId = 0; columnId < outRow.getColumnCount(); columnId++)
+          for (; columnId < outRow.getColumnCount(); columnId++)
           {
             /// COMMENT: Itertion all elements in this current column.
-            for (uint32_t i = 0; i < inputRGRowCount; i++, inRow.nextRow())
+            for (; rowId < inputRGRowCount; rowId++, inRow.nextRow())
             {
+              const bool isTheLastRow = (rowId == inputRGRowCount - 1);
+              const bool isTheLastColumn = (columnId == outRow.getColumnCount() - 1);
               {
                 /// COMMENT: Normalize one element of this current column. No need to have an additional normalize function call.
                 if (inRow.isNullValue(columnId))
@@ -1580,22 +1586,40 @@ void TupleUnion::readInput(uint32_t which)
               }
 
               /// COMMENT: Add to output in a new vectorized way.
-              addToOutputVec(&outRow, &l_outputRG, false, outRGData, tmpOutputRowCount, columnId == outRow.getColumnCount() - 1);
+              addToOutputVec(&outRow, &l_outputRG, false, outRGData, tmpOutputRowCount, isTheLastColumn);
 
-              /// COMMENT: tmpOutputRowCount is set to 8192, **only when** 8192 elements of the current column are processd **and** the current column is not the last one. 
-              ///          Then we need to switch to the next column with BREAK, because the batch can only contain no more than 8192 tuples.
-              if (UNLIKELY(tmpOutputRowCount == 8192))
+              /// COMMENT: The buffer is written out in the addToOutputVec with tmpOutputRowCount set from BUFFER_SIZE to 0.
+              ///          Otherwise, tmpOutputRowCount > 0.
+              ///          This case is called "bufferout".
+              if (UNLIKELY(tmpOutputRowCount == 0 && !isTheLastRow && isTheLastColumn))
               {
+                /// COMMENT: Process next block: the next row, the first column.
+                rowIdGoback = rowId + 1;
+                columnId = 0;
+              }
+
+              /// COMMENT: tmpOutputRowCount is set to BUFFER_SIZE, **only when** BUFFER_SIZE elements of the current column are processd **and** the current column is not the last one. 
+              ///          Then we need to switch to the next column with BREAK, because the batch can only contain no more than BUFFER_SIZE tuples.
+              ///          This case is called "goback".
+              if (UNLIKELY(tmpOutputRowCount == BUFFER_SIZE || (isTheLastRow && !isTheLastColumn)))
+              {
+                gobackFlag = true;
+                rowId++;
+                inRow.nextRow();  // Make nextRow the same times function call on inRow and outRow.
                 break;
               }
             }
             
             /// COMMENT: If the current column is not the last one, we need to move the handle back to process the next column.
-            if (columnId != outRow.getColumnCount() - 1) 
+            ///          This case is called "goback". Because we go back to: the rowIdGoback, the next column. 
+            if (gobackFlag) 
             {
+              idbassert(columnId != outRow.getColumnCount() - 1);
+              gobackFlag = false;
               tmpOutputRowCount = 0;
-              inRow.prevRow(inRow.getSize(), std::min<uint32_t>(8192, inputRGRowCount));
-              outRow.prevRow(outRow.getSize(), std::min<uint32_t>(8192, inputRGRowCount));
+              inRow.prevRow(inRow.getSize(), rowId - rowIdGoback);
+              outRow.prevRow(outRow.getSize(), rowId - rowIdGoback);
+              rowId = rowIdGoback;
             }
 
           }
@@ -1718,9 +1742,9 @@ void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit, RGData& data, ui
   r->nextRow();
   tmpOutputRowCount++;
 
-  if (UNLIKELY(tmpOutputRowCount == 8192))
+  if (UNLIKELY(tmpOutputRowCount == BUFFER_SIZE))
   {
-    rg->setRowCount(8192);
+    rg->setRowCount(BUFFER_SIZE);
     {
       boost::mutex::scoped_lock lock(sMutex);
       output->insert(data);
@@ -1741,10 +1765,11 @@ void TupleUnion::addToOutputVec(Row* outRow, RowGroup* outputRG, bool keepit, RG
   outRow->nextRow();
   ++tmpOutputRowCount;
 
-  /// COMMENT: Insert this batch to output, **only when** the last column is processed. 
-  if (UNLIKELY(isTheLastColumn && tmpOutputRowCount == 8192))
+  /// COMMENT: Insert this batch to output, **only when** the last column is processed.
+  ///          This case is called "bufferout". 
+  if (UNLIKELY(isTheLastColumn && tmpOutputRowCount == BUFFER_SIZE))
   {
-    outputRG->setRowCount(8192);
+    outputRG->setRowCount(BUFFER_SIZE);
     {
       boost::mutex::scoped_lock lock(sMutex);
       output->insert(data);

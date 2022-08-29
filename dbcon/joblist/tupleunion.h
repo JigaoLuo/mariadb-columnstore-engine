@@ -121,6 +121,7 @@ class TupleUnion : public JobStep, public TupleDeliveryStep
     static const uint64_t normalizedFlag = 0x800000000000ULL;  // 48th bit is set
   };
 
+  static constexpr const uint64_t BUFFER_SIZE = 8192;
   void getOutput(rowgroup::RowGroup* rg, rowgroup::Row* row, rowgroup::RGData* data);
   void addToOutput(rowgroup::Row* r, rowgroup::RowGroup* rg, bool keepit, rowgroup::RGData& data, uint32_t& tmpOutputRowCount);
   void addToOutputVec(rowgroup::Row* outRow, rowgroup::RowGroup* outputRG, bool keepit, rowgroup::RGData& data, uint32_t& tmpOutputRowCount, bool isTheLastColumn);
