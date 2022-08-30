@@ -1612,7 +1612,7 @@ void TupleUnion::readInput(uint32_t which)
             
             /// COMMENT: If the current column is not the last one, we need to move the handle back to process the next column.
             ///          This case is called "goback". Because we go back to: the rowIdGoback, the next column. 
-            if (gobackFlag) 
+            if (UNLIKELY(gobackFlag)) 
             {
               idbassert(columnId != outRow.getColumnCount() - 1);
               gobackFlag = false;
