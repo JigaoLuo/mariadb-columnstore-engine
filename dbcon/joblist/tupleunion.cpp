@@ -34,6 +34,7 @@ using namespace querytele;
 #include "jlf_common.h"
 #include "resourcemanager.h"
 #include "tupleunion.h"
+#include <xmmintrin.h>
 
 using namespace std;
 using namespace std::tr1;
@@ -60,655 +61,676 @@ namespace
 {
   // union helper functions.
 
-  void normalizeIntToIntNoScale(const Row& in, Row* out, uint32_t i) 
+ void normalizeIntToIntNoScale(Row& in, Row* out, uint32_t i) 
   {
     out->setIntField(in.getIntField(i), i); 
   }
 
-  void normalizeIntToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  void normalizeIntToIntNoScaleVec(Row& in, Row* out, uint32_t i) 
   {
-    const int diff = out->getScale(i) - in.getScale(i);
-    idbassert(diff >= 0);
-    int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
-    out->setInt128Field(val, i);
+    __m128i vec;
+    std::array<int, 4> arr;
+    for (uint32_t c = 0; c < 4 /*Magic Number Fix Later TODO:*/; c++) {
+      arr[c] = in.getIntField(i); 
+      in.nextRow();
+    }
+    for (uint32_t c = 0; c < 4 /*Magic Number Fix Later TODO:*/; c++) {
+      out->setIntField(arr[c], i); 
+      out->nextRow();
+    }
+
+    // Or this:
+    // for (uint32_t c = 0; c < 4 /*Magic Number Fix Later TODO:*/; c++) {
+    //   out->setIntField(in.getIntField(i), i); 
+    //   in.nextRow();
+    //   out->nextRow();
+    // }
   }
 
-  void normalizeIntToIntWithScaleInt64(const Row& in, Row* out, uint32_t i) 
-  {
-    const int diff = out->getScale(i) - in.getScale(i);
-    idbassert(diff >= 0);
-    int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
-    out->setIntField(val, i);
-  }
+  // void normalizeIntToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   const int diff = out->getScale(i) - in.getScale(i);
+  //   idbassert(diff >= 0);
+  //   int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
+  //   out->setInt128Field(val, i);
+  // }
+
+  // void normalizeIntToIntWithScaleInt64(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   const int diff = out->getScale(i) - in.getScale(i);
+  //   idbassert(diff >= 0);
+  //   int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
+  //   out->setIntField(val, i);
+  // }
   
-  void normalizeIntToUintNoScale(const Row& in, Row* out, uint32_t i) 
-  {
-    out->setIntField(in.getIntField(i), i); 
-  }
-
-  void normalizeIntToUintWithScaleInt128(const Row& in, Row* out, uint32_t i) 
-  {
-    const int diff = out->getScale(i) - in.getScale(i);
-    idbassert(diff >= 0);
-    int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
-    out->setInt128Field(val, i);
-  }
-
-  void normalizeIntToUintWithScaleInt64(const Row& in, Row* out, uint32_t i) 
-  {
-    const int diff = out->getScale(i) - in.getScale(i);
-    idbassert(diff >= 0);
-    int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
-    out->setIntField(val, i);
-  }
-
-  void normalizeIntToStringWithScale(const Row& in, Row* out, uint32_t i) 
-  {
-    ostringstream os;
-    double d = in.getIntField(i);
-    d /= exp10(in.getScale(i));
-    os.precision(15);
-    os << d;
-    out->setStringField(os.str(), i);
-  }
-
-
-  void normalizeIntToStringNoScale(const Row& in, Row* out, uint32_t i) 
-  {
-    ostringstream os;
-    os << in.getIntField(i);
-    out->setStringField(os.str(), i);
-  }
-
-  void normalizeIntToXFloat(const Row& in, Row* out, uint32_t i) 
-  {
-    auto d = in.getScaledSInt64FieldAsXFloat<double>(i);
-    out->setFloatField((float)d, i);
-  }
-
-  void normalizeIntToXDouble(const Row& in, Row* out, uint32_t i) 
-  {
-    auto d = in.getScaledSInt64FieldAsXFloat<double>(i);
-    out->setDoubleField(d, i);
-  }
-
-  void normalizeIntToLongDouble(const Row& in, Row* out, uint32_t i) 
-  {
-    auto d = in.getScaledSInt64FieldAsXFloat<long double>(i);
-    out->setLongDoubleField(d, i);
-  }
-
-  void normalizeIntToXDecimalWithScaleInt128(const Row& in, Row* out, uint32_t i) 
-  {
-    const int diff = out->getScale(i) - in.getScale(i);
-    idbassert(diff >= 0);
-    int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
-    out->setInt128Field(val, i);
-  }
-
-  void normalizeIntToXDecimalWithScaleInt64(const Row& in, Row* out, uint32_t i) 
-  {
-    const int diff = out->getScale(i) - in.getScale(i);
-    idbassert(diff >= 0);
-    int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
-    out->setIntField(val, i);
-  }
-
-  void normalizeUintToIntNoScale(const Row& in, Row* out, uint32_t i) 
-  {
-    out->setIntField(in.getUintField(i), i); 
-  }
-
-  void normalizeUintToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
-  {
-    const int diff = out->getScale(i) - in.getScale(i);
-    idbassert(diff >= 0);
-    int128_t val = datatypes::applySignedScale<int128_t>(in.getUintField(i), diff);
-    out->setInt128Field(val, i);
-  }
-
-  void normalizeUntToIntWithScaleUint64(const Row& in, Row* out, uint32_t i) 
-  {
-    const int diff = out->getScale(i) - in.getScale(i);
-    idbassert(diff >= 0);
-    uint64_t val = datatypes::applySignedScale<uint64_t>(in.getUintField(i), diff);
-    out->setUintField(val, i);
-  }
-
-  void normalizeUintToUint(const Row& in, Row* out, uint32_t i) 
-  {
-    out->setUintField(in.getUintField(i), i); 
-  }
-
-  void normalizeUintToStringWithScale(const Row& in, Row* out, uint32_t i) 
-  {
-    ostringstream os;
-    double d = in.getUintField(i);
-    d /= exp10(in.getScale(i));
-    os.precision(15);
-    os << d;
-    out->setStringField(os.str(), i);
-  }
-
-  void normalizeUintToStringNoScale(const Row& in, Row* out, uint32_t i) 
-  {
-    ostringstream os;
-    os << in.getUintField(i);
-    out->setStringField(os.str(), i);
-  }
-
-  void normalizUintToXFloat(const Row& in, Row* out, uint32_t i) 
-  {
-    auto d = in.getScaledUInt64FieldAsXFloat<double>(i);
-    out->setFloatField((float)d, i);
-  }
-
-  void normalizeUintToXDouble(const Row& in, Row* out, uint32_t i) 
-  {
-    auto d = in.getScaledUInt64FieldAsXFloat<double>(i);
-    out->setDoubleField(d, i);
-  }
-
-  void normalizeUintToLongDouble(const Row& in, Row* out, uint32_t i) 
-  {
-    auto d = in.getScaledUInt64FieldAsXFloat<long double>(i);
-    out->setLongDoubleField(d, i);
-  }
-
-  void normalizeUintToXDecimalWithScaleInt128(const Row& in, Row* out, uint32_t i) 
-  {
-    const int diff = out->getScale(i) - in.getScale(i);
-    idbassert(diff >= 0);
-    int128_t val = datatypes::applySignedScale<int128_t>(in.getUintField(i), diff);
-    out->setInt128Field(val, i);
-  }
-
-  void normalizeUintToXDecimalWithScalUint64(const Row& in, Row* out, uint32_t i) 
-  {
-    const int diff = out->getScale(i) - in.getScale(i);
-    idbassert(diff >= 0);
-    uint64_t val = datatypes::applySignedScale<uint64_t>(in.getUintField(i), diff);
-    out->setUintField(val, i);
-  }
-
-  void normalizeStringToString(const Row& in, Row* out, uint32_t i) 
-  {
-    out->setStringField(in.getStringField(i), i);
-  }
-
-  void normalizeDateToDate(const Row& in, Row* out, uint32_t i) 
-  {
-    out->setIntField(in.getIntField(i), i);
-  }
-
-  void normalizeDateToDatetime(const Row& in, Row* out, uint32_t i) 
-  {
-    uint64_t date = in.getUintField(i);
-    date &= ~0x3f;  // zero the 'spare' field
-    date <<= 32;
-    out->setUintField(date, i);
-  }
-
-  void normalizeDateToTimestampInvalid(const Row& in, Row* out, uint32_t i) 
-  {
-    dataconvert::TimeStamp timeStamp;
-    timeStamp.reset();
-    uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
-    out->setUintField(outValue, i);
-  }
-
-  void normalizeDateToTimestampValid(const Row& in, Row* out, uint32_t i, int64_t seconds, unsigned long second_part) 
-  {
-    dataconvert::TimeStamp timeStamp;
-    timeStamp.second = seconds;
-    timeStamp.msecond = second_part;
-    uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
-    out->setUintField(outValue, i);
-  }
-
-  void normalizeDateToString(const Row& in, Row* out, uint32_t i) 
-  {
-    string d = DataConvert::dateToString(in.getUintField(i));
-    out->setStringField(d, i);
-  }
-
-  void normalizeDatetimeToDatetime(const Row& in, Row* out, uint32_t i) 
-  {
-    out->setIntField(in.getIntField(i), i);
-  }
-
-  void normalizeDatetimeToDate(const Row& in, Row* out, uint32_t i) 
-  {
-    uint64_t val = in.getUintField(i);
-    val >>= 32;
-    out->setUintField(val, i);
-  }
-
-  void normalizeDatetimeToTimestampInvalid(const Row& in, Row* out, uint32_t i) 
-  {
-    dataconvert::TimeStamp timeStamp;
-    timeStamp.reset();
-    uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
-    out->setUintField(outValue, i);
-  }
-
-  void normalizeDatetimeToTimestampValid(const Row& in, Row* out, uint32_t i, int64_t seconds, unsigned long second_part) 
-  {
-    dataconvert::TimeStamp timeStamp;
-    timeStamp.second = seconds;
-    timeStamp.msecond = second_part;
-    uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
-    out->setUintField(outValue, i);
-  }
-
-  void normalizeDatetimeToString(const Row& in, Row* out, uint32_t i) 
-  {
-    string d = DataConvert::datetimeToString(in.getUintField(i));
-    out->setStringField(d, i);
-  }
-
-  void normalizeTimestampToTimestamp(const Row& in, Row* out, uint32_t i) 
-  {
-    out->setIntField(in.getIntField(i), i);
-  }
-
-  void normalizeTimestampToDate(const Row& in, Row* out, uint32_t i, long fTimeZone) 
-  {
-    uint64_t val = in.getUintField(i);
-    dataconvert::TimeStamp timestamp(val);
-    int64_t seconds = timestamp.second;
-    uint64_t outValue;
-
-    dataconvert::MySQLTime time;
-    dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
-
-    dataconvert::Date date;
-    date.year = time.year;
-    date.month = time.month;
-    date.day = time.day;
-    date.spare = 0;
-    outValue = (uint32_t) * (reinterpret_cast<uint32_t*>(&date));
-
-    out->setUintField(outValue, i);
-  }
-
-  void normalizeTimestampToDatetime(const Row& in, Row* out, uint32_t i, long fTimeZone) 
-  {
-    uint64_t val = in.getUintField(i);
-    dataconvert::TimeStamp timestamp(val);
-    int64_t seconds = timestamp.second;
-    uint64_t outValue;
-
-    dataconvert::MySQLTime time;
-    dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
-
-    dataconvert::DateTime datetime;
-    datetime.year = time.year;
-    datetime.month = time.month;
-    datetime.day = time.day;
-    datetime.hour = time.hour;
-    datetime.minute = time.minute;
-    datetime.second = time.second;
-    datetime.msecond = timestamp.msecond;
-    outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&datetime));
-
-    out->setUintField(outValue, i);
-  }
-
-  void normalizeTimestampToString(const Row& in, Row* out, uint32_t i, long fTimeZone) 
-  {
-    string d = DataConvert::timestampToString(in.getUintField(i), fTimeZone);
-    out->setStringField(d, i);
-  }
-
-  void normalizeTimeToTime(const Row& in, Row* out, uint32_t i) 
-  {
-    out->setIntField(in.getIntField(i), i);
-  }
-
-  void normalizeTimeToString(const Row& in, Row* out, uint32_t i) 
-  {
-    string d = DataConvert::timeToString(in.getIntField(i));
-    out->setStringField(d, i);
-  }
-
-  void normalizeXFloatToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getFloatField(i);
-    /* have to pick a scale to use for the double. using 5... */
-    uint32_t scale = 5;
-    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-    const int diff = out->getScale(i) - scale;
-    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    out->setInt128Field(ival, i);
-  }
-
-  void normalizeXDoubleToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getDoubleField(i);
-    /* have to pick a scale to use for the double. using 5... */
-    uint32_t scale = 5;
-    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-    const int diff = out->getScale(i) - scale;
-    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    out->setInt128Field(ival, i);
-  }
-
-  void normalizeXFloatToIntWithScaleInt64(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getFloatField(i);
-    /* have to pick a scale to use for the double. using 5... */
-    uint32_t scale = 5;
-    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-    const int diff = out->getScale(i) - scale;
-    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    out->setIntField(ival, i);
-  }
-
-  void normalizeXDoubleToIntWithScaleInt64(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getDoubleField(i);
-    /* have to pick a scale to use for the double. using 5... */
-    uint32_t scale = 5;
-    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-    const int diff = out->getScale(i) - scale;
-    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    out->setIntField(ival, i);
-  }
-
-  void normalizeXFloatToIntNoScale(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getFloatField(i);
-    out->setIntField((int64_t)val, i);
-  }
-
-  void normalizeXDoubleToIntNoScale(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getDoubleField(i);
-    out->setIntField((int64_t)val, i);
-  }
-
-  void normalizeXFloatToUint(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getFloatField(i);
-    out->setUintField((uint64_t)val, i);
-  }
-
-  void normalizeXDoubleToUint(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getDoubleField(i);
-    out->setUintField((uint64_t)val, i);
-  }
-
-  void normalizeXFloatToXFloat(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getFloatField(i);
-    out->setFloatField(val, i);
-  }
-
-  void normalizeXDoubleToXFloat(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getDoubleField(i);
-    out->setFloatField(val, i);
-  }
-
-  void normalizeXFloatToXDouble(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getFloatField(i);
-    out->setDoubleField(val, i);
-  }
-
-  void normalizeXDoubleToXDouble(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getDoubleField(i);
-    out->setDoubleField(val, i);
-  }
-
-  void normalizeXFloatToLongDouble(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getFloatField(i);
-    out->setLongDoubleField(val, i);
-  }
-
-
-  void normalizeXDoubleToLongDouble(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getDoubleField(i);
-    out->setLongDoubleField(val, i);
-  }
-
-  void normalizeXFloatToString(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getFloatField(i);
-    ostringstream os;
-    os.precision(15);  // to match mysql's output
-    os << val;
-    out->setStringField(os.str(), i);
-  }
-
-  void normalizeXDoubleToString(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getDoubleField(i);
-    ostringstream os;
-    os.precision(15);  // to match mysql's output
-    os << val;
-    out->setStringField(os.str(), i);
-  }
-
-  void normalizeXFloatToWideXDecimal(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getFloatField(i);
-    /* have to pick a scale to use for the double. using 5... */
-    uint32_t scale = 5;
-    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-    const int diff = out->getScale(i) - scale;
-    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    out->setInt128Field(ival, i);
-  }
-
-  void normalizeXDoubleToWideXDecimal(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getDoubleField(i);
-    /* have to pick a scale to use for the double. using 5... */
-    uint32_t scale = 5;
-    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-    const int diff = out->getScale(i) - scale;
-    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    out->setInt128Field(ival, i);
-  }
-
-  void normalizeXFloatToXDecimal(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getFloatField(i);
-    /* have to pick a scale to use for the double. using 5... */
-    uint32_t scale = 5;
-    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-    const int diff = out->getScale(i) - scale;
-    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    out->setIntField(ival, i);
-  }
-
-  void normalizeXDoubleToXDecimal(const Row& in, Row* out, uint32_t i) 
-  {
-    double val = in.getDoubleField(i);
-    /* have to pick a scale to use for the double. using 5... */
-    uint32_t scale = 5;
-    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-    const int diff = out->getScale(i) - scale;
-    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    out->setIntField(ival, i);
-  }
-
-  void normalizeLongDoubleToIntNoScale(const Row& in, Row* out, uint32_t i) 
-  {
-    long double val = in.getLongDoubleField(i);
-    out->setIntField((int64_t)val, i);
-  }
-
-  void normalizeLongDoubleToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
-  {
-    long double val = in.getLongDoubleField(i);
-    /* have to pick a scale to use for the double. using 5... */
-    uint32_t scale = 5;
-    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-    int diff = out->getScale(i) - scale;
-    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    out->setInt128Field(ival, i);
-  }
-
-  void normalizeLongDoubleToIntWithScaleInt(const Row& in, Row* out, uint32_t i) 
-  {
-    long double val = in.getLongDoubleField(i);
-    /* have to pick a scale to use for the double. using 5... */
-    uint32_t scale = 5;
-    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-    int diff = out->getScale(i) - scale;
-    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    out->setIntField(ival, i);
-  }
-
-  void normalizeLongDoubleToUint(const Row& in, Row* out, uint32_t i) 
-  {
-    long double val = in.getLongDoubleField(i);
-    out->setUintField((uint64_t)val, i);
-  }
-
-  void normalizeLongDoubleToXFloat(const Row& in, Row* out, uint32_t i) 
-  {
-    long double val = in.getLongDoubleField(i);
-    out->setFloatField(val, i);
-  }
-
-  void normalizeLongDoubleToXDouble(const Row& in, Row* out, uint32_t i) 
-  {
-    long double val = in.getLongDoubleField(i);
-    out->setDoubleField(val, i);
-  }
-
-  void normalizeLongDoubleToLongDouble(const Row& in, Row* out, uint32_t i) 
-  {
-    long double val = in.getLongDoubleField(i);
-    out->setIntField((int64_t)val, i);
-  }
-
-  void normalizeLongDoubleToString(const Row& in, Row* out, uint32_t i) 
-  {
-    long double val = in.getLongDoubleField(i);
-    ostringstream os;
-    os.precision(15);  // to match mysql's output
-    os << val;
-    out->setStringField(os.str(), i);
-  }
-
-  void normalizeLongDoubleToXDecimalWithScaleInt128(const Row& in, Row* out, uint32_t i) 
-  {
-    long double val = in.getLongDoubleField(i);
-    /* have to pick a scale to use for the double. using 5... */
-    uint32_t scale = 5;
-    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-    int diff = out->getScale(i) - scale;
-    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    out->setInt128Field(ival, i);
-  }
-
-  void normalizeLongDoubleToXDecimalWithScaleInt(const Row& in, Row* out, uint32_t i) 
-  {
-    long double val = in.getLongDoubleField(i);
-    /* have to pick a scale to use for the double. using 5... */
-    uint32_t scale = 5;
-    uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
-    int diff = out->getScale(i) - scale;
-    ival = datatypes::applySignedScale<uint64_t>(ival, diff);
-    out->setIntField(ival, i);
-  }
-
-  void normalizeWideXDecimalToWideXDecimalNoScale(const Row& in, Row* out, uint32_t i) 
-  {
-    int128_t val128 = 0;
-    in.getInt128Field(i, val128);
-    out->setInt128Field(val128, i);
-  }
-
-  void normalizeXDecimalToWideXDecimalNoScale(const Row& in, Row* out, uint32_t i) 
-  {
-    int64_t val = in.getIntField(i);      
-    out->setInt128Field(val, i);
-  }
-
-  void normalizeWideXDecimalToWideXDecimalWithScale(const Row& in, Row* out, uint32_t i) 
-  {
-    int128_t val128 = 0;
-    in.getInt128Field(i, val128);
-    int128_t temp = datatypes::applySignedScale<int128_t>(val128, out->getScale(i) - in.getScale(i));
-    out->setInt128Field(temp, i);
-  }
-
-  void normalizeXDecimalToWideXDecimalWithScale(const Row& in, Row* out, uint32_t i) 
-  {
-    int64_t val = in.getIntField(i);
-    int128_t temp = datatypes::applySignedScale<int128_t>(val, out->getScale(i) - in.getScale(i));
-    out->setInt128Field(temp, i);
-  }
-
-  void normalizeXDecimalToOtherNoScale(const Row& in, Row* out, uint32_t i) 
-  {
-    int64_t val = in.getIntField(i);
-    out->setIntField(val, i);
-  }
-
-  void normalizeXDecimalToOtherWithScale(const Row& in, Row* out, uint32_t i) 
-  {
-    int64_t val = in.getIntField(i);
-    int64_t temp = datatypes::applySignedScale<int64_t>(val, out->getScale(i) - in.getScale(i));
-    out->setIntField(temp, i);
-  }
-
-  void normalizeXDecimalToXFloat(const Row& in, Row* out, uint32_t i) 
-  {
-    int64_t val = in.getIntField(i);
-    float fval = ((float)val) / IDB_pow[in.getScale(i)];
-    out->setFloatField(fval, i);
-  }
-
-  void normalizeXDecimalToXDouble(const Row& in, Row* out, uint32_t i) 
-  {
-    int64_t val = in.getIntField(i);
-    double dval = ((double)val) / IDB_pow[in.getScale(i)];
-    out->setDoubleField(dval, i);
-  }
-
-  void normalizeXDecimalToLongDouble(const Row& in, Row* out, uint32_t i) 
-  {
-    int64_t val = in.getIntField(i);
-    long double dval = ((long double)val) / IDB_pow[in.getScale(i)];
-    out->setLongDoubleField(dval, i);
-  }
-
-  void normalizeWideXDecimalToString(const Row& in, Row* out, uint32_t i) 
-  {
-    int128_t val128 = 0;
-    in.getInt128Field(i, val128);
-    datatypes::Decimal dec(0, in.getScale(i), in.getPrecision(i), val128);
-    out->setStringField(dec.toString(), i);
-  }
-
-  void normalizeXDecimalToString(const Row& in, Row* out, uint32_t i) 
-  {
-    int64_t val = in.getIntField(i);
-    datatypes::Decimal dec(val, in.getScale(i), in.getPrecision(i));
-    out->setStringField(dec.toString(), i);
-  }
-
-  void normalizeBlobVarbinary(const Row& in, Row* out, uint32_t i) 
-  {
-    // out->setVarBinaryField(in.getVarBinaryStringField(i), i);  // not efficient
-    out->setVarBinaryField(in.getVarBinaryField(i), in.getVarBinaryLength(i), i);
-  }
-
-  std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> inferNormalizeFunctions(const Row& in, Row* out, long fTimeZone)
+  // void normalizeIntToUintNoScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   out->setIntField(in.getIntField(i), i); 
+  // }
+
+  // void normalizeIntToUintWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   const int diff = out->getScale(i) - in.getScale(i);
+  //   idbassert(diff >= 0);
+  //   int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
+  //   out->setInt128Field(val, i);
+  // }
+
+  // void normalizeIntToUintWithScaleInt64(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   const int diff = out->getScale(i) - in.getScale(i);
+  //   idbassert(diff >= 0);
+  //   int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
+  //   out->setIntField(val, i);
+  // }
+
+  // void normalizeIntToStringWithScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   ostringstream os;
+  //   double d = in.getIntField(i);
+  //   d /= exp10(in.getScale(i));
+  //   os.precision(15);
+  //   os << d;
+  //   out->setStringField(os.str(), i);
+  // }
+
+
+  // void normalizeIntToStringNoScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   ostringstream os;
+  //   os << in.getIntField(i);
+  //   out->setStringField(os.str(), i);
+  // }
+
+  // void normalizeIntToXFloat(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   auto d = in.getScaledSInt64FieldAsXFloat<double>(i);
+  //   out->setFloatField((float)d, i);
+  // }
+
+  // void normalizeIntToXDouble(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   auto d = in.getScaledSInt64FieldAsXFloat<double>(i);
+  //   out->setDoubleField(d, i);
+  // }
+
+  // void normalizeIntToLongDouble(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   auto d = in.getScaledSInt64FieldAsXFloat<long double>(i);
+  //   out->setLongDoubleField(d, i);
+  // }
+
+  // void normalizeIntToXDecimalWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   const int diff = out->getScale(i) - in.getScale(i);
+  //   idbassert(diff >= 0);
+  //   int128_t val = datatypes::applySignedScale<int128_t>(in.getIntField(i), diff);
+  //   out->setInt128Field(val, i);
+  // }
+
+  // void normalizeIntToXDecimalWithScaleInt64(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   const int diff = out->getScale(i) - in.getScale(i);
+  //   idbassert(diff >= 0);
+  //   int64_t val = datatypes::applySignedScale<int64_t>(in.getIntField(i), diff);
+  //   out->setIntField(val, i);
+  // }
+
+  // void normalizeUintToIntNoScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   out->setIntField(in.getUintField(i), i); 
+  // }
+
+  // void normalizeUintToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   const int diff = out->getScale(i) - in.getScale(i);
+  //   idbassert(diff >= 0);
+  //   int128_t val = datatypes::applySignedScale<int128_t>(in.getUintField(i), diff);
+  //   out->setInt128Field(val, i);
+  // }
+
+  // void normalizeUntToIntWithScaleUint64(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   const int diff = out->getScale(i) - in.getScale(i);
+  //   idbassert(diff >= 0);
+  //   uint64_t val = datatypes::applySignedScale<uint64_t>(in.getUintField(i), diff);
+  //   out->setUintField(val, i);
+  // }
+
+  // void normalizeUintToUint(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   out->setUintField(in.getUintField(i), i); 
+  // }
+
+  // void normalizeUintToStringWithScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   ostringstream os;
+  //   double d = in.getUintField(i);
+  //   d /= exp10(in.getScale(i));
+  //   os.precision(15);
+  //   os << d;
+  //   out->setStringField(os.str(), i);
+  // }
+
+  // void normalizeUintToStringNoScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   ostringstream os;
+  //   os << in.getUintField(i);
+  //   out->setStringField(os.str(), i);
+  // }
+
+  // void normalizUintToXFloat(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   auto d = in.getScaledUInt64FieldAsXFloat<double>(i);
+  //   out->setFloatField((float)d, i);
+  // }
+
+  // void normalizeUintToXDouble(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   auto d = in.getScaledUInt64FieldAsXFloat<double>(i);
+  //   out->setDoubleField(d, i);
+  // }
+
+  // void normalizeUintToLongDouble(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   auto d = in.getScaledUInt64FieldAsXFloat<long double>(i);
+  //   out->setLongDoubleField(d, i);
+  // }
+
+  // void normalizeUintToXDecimalWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   const int diff = out->getScale(i) - in.getScale(i);
+  //   idbassert(diff >= 0);
+  //   int128_t val = datatypes::applySignedScale<int128_t>(in.getUintField(i), diff);
+  //   out->setInt128Field(val, i);
+  // }
+
+  // void normalizeUintToXDecimalWithScalUint64(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   const int diff = out->getScale(i) - in.getScale(i);
+  //   idbassert(diff >= 0);
+  //   uint64_t val = datatypes::applySignedScale<uint64_t>(in.getUintField(i), diff);
+  //   out->setUintField(val, i);
+  // }
+
+  // void normalizeStringToString(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   out->setStringField(in.getStringField(i), i);
+  // }
+
+  // void normalizeDateToDate(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   out->setIntField(in.getIntField(i), i);
+  // }
+
+  // void normalizeDateToDatetime(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   uint64_t date = in.getUintField(i);
+  //   date &= ~0x3f;  // zero the 'spare' field
+  //   date <<= 32;
+  //   out->setUintField(date, i);
+  // }
+
+  // void normalizeDateToTimestampInvalid(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   dataconvert::TimeStamp timeStamp;
+  //   timeStamp.reset();
+  //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
+  //   out->setUintField(outValue, i);
+  // }
+
+  // void normalizeDateToTimestampValid(const Row& in, Row* out, uint32_t i, int64_t seconds, unsigned long second_part) 
+  // {
+  //   dataconvert::TimeStamp timeStamp;
+  //   timeStamp.second = seconds;
+  //   timeStamp.msecond = second_part;
+  //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
+  //   out->setUintField(outValue, i);
+  // }
+
+  // void normalizeDateToString(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   string d = DataConvert::dateToString(in.getUintField(i));
+  //   out->setStringField(d, i);
+  // }
+
+  // void normalizeDatetimeToDatetime(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   out->setIntField(in.getIntField(i), i);
+  // }
+
+  // void normalizeDatetimeToDate(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   uint64_t val = in.getUintField(i);
+  //   val >>= 32;
+  //   out->setUintField(val, i);
+  // }
+
+  // void normalizeDatetimeToTimestampInvalid(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   dataconvert::TimeStamp timeStamp;
+  //   timeStamp.reset();
+  //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
+  //   out->setUintField(outValue, i);
+  // }
+
+  // void normalizeDatetimeToTimestampValid(const Row& in, Row* out, uint32_t i, int64_t seconds, unsigned long second_part) 
+  // {
+  //   dataconvert::TimeStamp timeStamp;
+  //   timeStamp.second = seconds;
+  //   timeStamp.msecond = second_part;
+  //   uint64_t outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&timeStamp));
+  //   out->setUintField(outValue, i);
+  // }
+
+  // void normalizeDatetimeToString(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   string d = DataConvert::datetimeToString(in.getUintField(i));
+  //   out->setStringField(d, i);
+  // }
+
+  // void normalizeTimestampToTimestamp(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   out->setIntField(in.getIntField(i), i);
+  // }
+
+  // void normalizeTimestampToDate(const Row& in, Row* out, uint32_t i, long fTimeZone) 
+  // {
+  //   uint64_t val = in.getUintField(i);
+  //   dataconvert::TimeStamp timestamp(val);
+  //   int64_t seconds = timestamp.second;
+  //   uint64_t outValue;
+
+  //   dataconvert::MySQLTime time;
+  //   dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
+
+  //   dataconvert::Date date;
+  //   date.year = time.year;
+  //   date.month = time.month;
+  //   date.day = time.day;
+  //   date.spare = 0;
+  //   outValue = (uint32_t) * (reinterpret_cast<uint32_t*>(&date));
+
+  //   out->setUintField(outValue, i);
+  // }
+
+  // void normalizeTimestampToDatetime(const Row& in, Row* out, uint32_t i, long fTimeZone) 
+  // {
+  //   uint64_t val = in.getUintField(i);
+  //   dataconvert::TimeStamp timestamp(val);
+  //   int64_t seconds = timestamp.second;
+  //   uint64_t outValue;
+
+  //   dataconvert::MySQLTime time;
+  //   dataconvert::gmtSecToMySQLTime(seconds, time, fTimeZone);
+
+  //   dataconvert::DateTime datetime;
+  //   datetime.year = time.year;
+  //   datetime.month = time.month;
+  //   datetime.day = time.day;
+  //   datetime.hour = time.hour;
+  //   datetime.minute = time.minute;
+  //   datetime.second = time.second;
+  //   datetime.msecond = timestamp.msecond;
+  //   outValue = (uint64_t) * (reinterpret_cast<uint64_t*>(&datetime));
+
+  //   out->setUintField(outValue, i);
+  // }
+
+  // void normalizeTimestampToString(const Row& in, Row* out, uint32_t i, long fTimeZone) 
+  // {
+  //   string d = DataConvert::timestampToString(in.getUintField(i), fTimeZone);
+  //   out->setStringField(d, i);
+  // }
+
+  // void normalizeTimeToTime(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   out->setIntField(in.getIntField(i), i);
+  // }
+
+  // void normalizeTimeToString(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   string d = DataConvert::timeToString(in.getIntField(i));
+  //   out->setStringField(d, i);
+  // }
+
+  // void normalizeXFloatToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getFloatField(i);
+  //   /* have to pick a scale to use for the double. using 5... */
+  //   uint32_t scale = 5;
+  //   uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+  //   const int diff = out->getScale(i) - scale;
+  //   ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+  //   out->setInt128Field(ival, i);
+  // }
+
+  // void normalizeXDoubleToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getDoubleField(i);
+  //   /* have to pick a scale to use for the double. using 5... */
+  //   uint32_t scale = 5;
+  //   uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+  //   const int diff = out->getScale(i) - scale;
+  //   ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+  //   out->setInt128Field(ival, i);
+  // }
+
+  // void normalizeXFloatToIntWithScaleInt64(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getFloatField(i);
+  //   /* have to pick a scale to use for the double. using 5... */
+  //   uint32_t scale = 5;
+  //   uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+  //   const int diff = out->getScale(i) - scale;
+  //   ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+  //   out->setIntField(ival, i);
+  // }
+
+  // void normalizeXDoubleToIntWithScaleInt64(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getDoubleField(i);
+  //   /* have to pick a scale to use for the double. using 5... */
+  //   uint32_t scale = 5;
+  //   uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+  //   const int diff = out->getScale(i) - scale;
+  //   ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+  //   out->setIntField(ival, i);
+  // }
+
+  // void normalizeXFloatToIntNoScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getFloatField(i);
+  //   out->setIntField((int64_t)val, i);
+  // }
+
+  // void normalizeXDoubleToIntNoScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getDoubleField(i);
+  //   out->setIntField((int64_t)val, i);
+  // }
+
+  // void normalizeXFloatToUint(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getFloatField(i);
+  //   out->setUintField((uint64_t)val, i);
+  // }
+
+  // void normalizeXDoubleToUint(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getDoubleField(i);
+  //   out->setUintField((uint64_t)val, i);
+  // }
+
+  // void normalizeXFloatToXFloat(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getFloatField(i);
+  //   out->setFloatField(val, i);
+  // }
+
+  // void normalizeXDoubleToXFloat(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getDoubleField(i);
+  //   out->setFloatField(val, i);
+  // }
+
+  // void normalizeXFloatToXDouble(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getFloatField(i);
+  //   out->setDoubleField(val, i);
+  // }
+
+  // void normalizeXDoubleToXDouble(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getDoubleField(i);
+  //   out->setDoubleField(val, i);
+  // }
+
+  // void normalizeXFloatToLongDouble(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getFloatField(i);
+  //   out->setLongDoubleField(val, i);
+  // }
+
+
+  // void normalizeXDoubleToLongDouble(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getDoubleField(i);
+  //   out->setLongDoubleField(val, i);
+  // }
+
+  // void normalizeXFloatToString(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getFloatField(i);
+  //   ostringstream os;
+  //   os.precision(15);  // to match mysql's output
+  //   os << val;
+  //   out->setStringField(os.str(), i);
+  // }
+
+  // void normalizeXDoubleToString(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getDoubleField(i);
+  //   ostringstream os;
+  //   os.precision(15);  // to match mysql's output
+  //   os << val;
+  //   out->setStringField(os.str(), i);
+  // }
+
+  // void normalizeXFloatToWideXDecimal(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getFloatField(i);
+  //   /* have to pick a scale to use for the double. using 5... */
+  //   uint32_t scale = 5;
+  //   uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+  //   const int diff = out->getScale(i) - scale;
+  //   ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+  //   out->setInt128Field(ival, i);
+  // }
+
+  // void normalizeXDoubleToWideXDecimal(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getDoubleField(i);
+  //   /* have to pick a scale to use for the double. using 5... */
+  //   uint32_t scale = 5;
+  //   uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+  //   const int diff = out->getScale(i) - scale;
+  //   ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+  //   out->setInt128Field(ival, i);
+  // }
+
+  // void normalizeXFloatToXDecimal(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getFloatField(i);
+  //   /* have to pick a scale to use for the double. using 5... */
+  //   uint32_t scale = 5;
+  //   uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+  //   const int diff = out->getScale(i) - scale;
+  //   ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+  //   out->setIntField(ival, i);
+  // }
+
+  // void normalizeXDoubleToXDecimal(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   double val = in.getDoubleField(i);
+  //   /* have to pick a scale to use for the double. using 5... */
+  //   uint32_t scale = 5;
+  //   uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+  //   const int diff = out->getScale(i) - scale;
+  //   ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+  //   out->setIntField(ival, i);
+  // }
+
+  // void normalizeLongDoubleToIntNoScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   long double val = in.getLongDoubleField(i);
+  //   out->setIntField((int64_t)val, i);
+  // }
+
+  // void normalizeLongDoubleToIntWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   long double val = in.getLongDoubleField(i);
+  //   /* have to pick a scale to use for the double. using 5... */
+  //   uint32_t scale = 5;
+  //   uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+  //   int diff = out->getScale(i) - scale;
+  //   ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+  //   out->setInt128Field(ival, i);
+  // }
+
+  // void normalizeLongDoubleToIntWithScaleInt(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   long double val = in.getLongDoubleField(i);
+  //   /* have to pick a scale to use for the double. using 5... */
+  //   uint32_t scale = 5;
+  //   uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+  //   int diff = out->getScale(i) - scale;
+  //   ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+  //   out->setIntField(ival, i);
+  // }
+
+  // void normalizeLongDoubleToUint(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   long double val = in.getLongDoubleField(i);
+  //   out->setUintField((uint64_t)val, i);
+  // }
+
+  // void normalizeLongDoubleToXFloat(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   long double val = in.getLongDoubleField(i);
+  //   out->setFloatField(val, i);
+  // }
+
+  // void normalizeLongDoubleToXDouble(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   long double val = in.getLongDoubleField(i);
+  //   out->setDoubleField(val, i);
+  // }
+
+  // void normalizeLongDoubleToLongDouble(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   long double val = in.getLongDoubleField(i);
+  //   out->setIntField((int64_t)val, i);
+  // }
+
+  // void normalizeLongDoubleToString(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   long double val = in.getLongDoubleField(i);
+  //   ostringstream os;
+  //   os.precision(15);  // to match mysql's output
+  //   os << val;
+  //   out->setStringField(os.str(), i);
+  // }
+
+  // void normalizeLongDoubleToXDecimalWithScaleInt128(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   long double val = in.getLongDoubleField(i);
+  //   /* have to pick a scale to use for the double. using 5... */
+  //   uint32_t scale = 5;
+  //   uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+  //   int diff = out->getScale(i) - scale;
+  //   ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+  //   out->setInt128Field(ival, i);
+  // }
+
+  // void normalizeLongDoubleToXDecimalWithScaleInt(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   long double val = in.getLongDoubleField(i);
+  //   /* have to pick a scale to use for the double. using 5... */
+  //   uint32_t scale = 5;
+  //   uint64_t ival = (uint64_t)(double)(val * datatypes::scaleDivisor<double>(scale));
+  //   int diff = out->getScale(i) - scale;
+  //   ival = datatypes::applySignedScale<uint64_t>(ival, diff);
+  //   out->setIntField(ival, i);
+  // }
+
+  // void normalizeWideXDecimalToWideXDecimalNoScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   int128_t val128 = 0;
+  //   in.getInt128Field(i, val128);
+  //   out->setInt128Field(val128, i);
+  // }
+
+  // void normalizeXDecimalToWideXDecimalNoScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   int64_t val = in.getIntField(i);      
+  //   out->setInt128Field(val, i);
+  // }
+
+  // void normalizeWideXDecimalToWideXDecimalWithScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   int128_t val128 = 0;
+  //   in.getInt128Field(i, val128);
+  //   int128_t temp = datatypes::applySignedScale<int128_t>(val128, out->getScale(i) - in.getScale(i));
+  //   out->setInt128Field(temp, i);
+  // }
+
+  // void normalizeXDecimalToWideXDecimalWithScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   int64_t val = in.getIntField(i);
+  //   int128_t temp = datatypes::applySignedScale<int128_t>(val, out->getScale(i) - in.getScale(i));
+  //   out->setInt128Field(temp, i);
+  // }
+
+  // void normalizeXDecimalToOtherNoScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   int64_t val = in.getIntField(i);
+  //   out->setIntField(val, i);
+  // }
+
+  // void normalizeXDecimalToOtherWithScale(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   int64_t val = in.getIntField(i);
+  //   int64_t temp = datatypes::applySignedScale<int64_t>(val, out->getScale(i) - in.getScale(i));
+  //   out->setIntField(temp, i);
+  // }
+
+  // void normalizeXDecimalToXFloat(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   int64_t val = in.getIntField(i);
+  //   float fval = ((float)val) / IDB_pow[in.getScale(i)];
+  //   out->setFloatField(fval, i);
+  // }
+
+  // void normalizeXDecimalToXDouble(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   int64_t val = in.getIntField(i);
+  //   double dval = ((double)val) / IDB_pow[in.getScale(i)];
+  //   out->setDoubleField(dval, i);
+  // }
+
+  // void normalizeXDecimalToLongDouble(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   int64_t val = in.getIntField(i);
+  //   long double dval = ((long double)val) / IDB_pow[in.getScale(i)];
+  //   out->setLongDoubleField(dval, i);
+  // }
+
+  // void normalizeWideXDecimalToString(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   int128_t val128 = 0;
+  //   in.getInt128Field(i, val128);
+  //   datatypes::Decimal dec(0, in.getScale(i), in.getPrecision(i), val128);
+  //   out->setStringField(dec.toString(), i);
+  // }
+
+  // void normalizeXDecimalToString(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   int64_t val = in.getIntField(i);
+  //   datatypes::Decimal dec(val, in.getScale(i), in.getPrecision(i));
+  //   out->setStringField(dec.toString(), i);
+  // }
+
+  // void normalizeBlobVarbinary(const Row& in, Row* out, uint32_t i) 
+  // {
+  //   // out->setVarBinaryField(in.getVarBinaryStringField(i), i);  // not efficient
+  //   out->setVarBinaryField(in.getVarBinaryField(i), in.getVarBinaryLength(i), i);
+  // }
+
+  std::vector<std::pair<std::function<void(Row& in, Row* out, uint32_t col)>,std::function<void(Row& in, Row* out, uint32_t col)>>> inferNormalizeFunctions(Row& in, Row* out, long fTimeZone)
   {
     uint32_t i;
-    std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> result;
+    std::vector<std::pair<std::function<void(Row& in, Row* out, uint32_t col)>,std::function<void(Row& in, Row* out, uint32_t col)>>> result;
     for (i = 0; i < out->getColumnCount(); i++)
     {
       if (in.isNullValue(i))
@@ -734,80 +756,80 @@ namespace
             {
               if (out->getScale(i) || in.getScale(i)) 
               {
-                if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                  result.emplace_back(normalizeIntToIntWithScaleInt128);
-                else
-                  result.emplace_back(normalizeIntToIntWithScaleInt64);
+                // if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+                //   result.emplace_back(normalizeIntToIntWithScaleInt128);
+                // else
+                //   result.emplace_back(normalizeIntToIntWithScaleInt64);
               } 
               else
-                result.emplace_back(normalizeIntToIntNoScale); 
+                result.emplace_back(normalizeIntToIntNoScaleVec, normalizeIntToIntNoScale); 
               break;
             }
 
-            case CalpontSystemCatalog::UTINYINT:
-            case CalpontSystemCatalog::USMALLINT:
-            case CalpontSystemCatalog::UMEDINT:
-            case CalpontSystemCatalog::UINT:
-            case CalpontSystemCatalog::UBIGINT:
-            {
-              if (in.getScale(i))
-              {
-                if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                  result.emplace_back(normalizeIntToUintWithScaleInt128);
-                else
-                  result.emplace_back(normalizeIntToUintWithScaleInt64);
-              } 
-              else
-                result.emplace_back(normalizeIntToUintNoScale); 
-              break;
-            }
+            // case CalpontSystemCatalog::UTINYINT:
+            // case CalpontSystemCatalog::USMALLINT:
+            // case CalpontSystemCatalog::UMEDINT:
+            // case CalpontSystemCatalog::UINT:
+            // case CalpontSystemCatalog::UBIGINT:
+            // {
+            //   if (in.getScale(i))
+            //   {
+            //     if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+            //       result.emplace_back(normalizeIntToUintWithScaleInt128);
+            //     else
+            //       result.emplace_back(normalizeIntToUintWithScaleInt64);
+            //   } 
+            //   else
+            //     result.emplace_back(normalizeIntToUintNoScale); 
+            //   break;
+            // }
 
-            case CalpontSystemCatalog::CHAR:
-            case CalpontSystemCatalog::TEXT:
-            case CalpontSystemCatalog::VARCHAR: 
-            {
-              if (in.getScale(i))
-                result.emplace_back(normalizeIntToStringWithScale);
-              else
-                result.emplace_back(normalizeIntToStringNoScale);
-              break;
-            }
+            // case CalpontSystemCatalog::CHAR:
+            // case CalpontSystemCatalog::TEXT:
+            // case CalpontSystemCatalog::VARCHAR: 
+            // {
+            //   if (in.getScale(i))
+            //     result.emplace_back(normalizeIntToStringWithScale);
+            //   else
+            //     result.emplace_back(normalizeIntToStringNoScale);
+            //   break;
+            // }
 
-            case CalpontSystemCatalog::DATE:
-            case CalpontSystemCatalog::DATETIME:
-            case CalpontSystemCatalog::TIME:
-            case CalpontSystemCatalog::TIMESTAMP:
-              throw logic_error(
-                  "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
+            // case CalpontSystemCatalog::DATE:
+            // case CalpontSystemCatalog::DATETIME:
+            // case CalpontSystemCatalog::TIME:
+            // case CalpontSystemCatalog::TIMESTAMP:
+            //   throw logic_error(
+            //       "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
 
-            case CalpontSystemCatalog::FLOAT:
-            case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeIntToXFloat); break;
+            // case CalpontSystemCatalog::FLOAT:
+            // case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeIntToXFloat); break;
 
-            case CalpontSystemCatalog::DOUBLE:
-            case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeIntToXDouble); break;
+            // case CalpontSystemCatalog::DOUBLE:
+            // case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeIntToXDouble); break;
 
-            case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeIntToLongDouble); break;
+            // case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeIntToLongDouble); break;
 
-            case CalpontSystemCatalog::DECIMAL:
-            case CalpontSystemCatalog::UDECIMAL:
-            {
-              /*
-                Signed INT to XDecimal
-                TODO:
-                - This code does not handle overflow that may happen on
-                  scale multiplication. Instead of returning a garbage value
-                  we should probably apply saturation here. In long terms we
-                  should implement DECIMAL(65,x) to avoid overflow completely
-                  (so the UNION between DECIMAL and integer can choose a proper
-                    DECIMAL(M,N) result data type to guarantee that any incoming
-                    integer value can fit into it).
-              */
-              if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                result.emplace_back(normalizeIntToXDecimalWithScaleInt128);
-              else
-                result.emplace_back(normalizeIntToXDecimalWithScaleInt64);
-              break;
-            }
+            // case CalpontSystemCatalog::DECIMAL:
+            // case CalpontSystemCatalog::UDECIMAL:
+            // {
+            //   /*
+            //     Signed INT to XDecimal
+            //     TODO:
+            //     - This code does not handle overflow that may happen on
+            //       scale multiplication. Instead of returning a garbage value
+            //       we should probably apply saturation here. In long terms we
+            //       should implement DECIMAL(65,x) to avoid overflow completely
+            //       (so the UNION between DECIMAL and integer can choose a proper
+            //         DECIMAL(M,N) result data type to guarantee that any incoming
+            //         integer value can fit into it).
+            //   */
+            //   if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+            //     result.emplace_back(normalizeIntToXDecimalWithScaleInt128);
+            //   else
+            //     result.emplace_back(normalizeIntToXDecimalWithScaleInt64);
+            //   break;
+            // }
 
             default:
               ostringstream os;
@@ -818,517 +840,517 @@ namespace
 
           break;
 
-        case CalpontSystemCatalog::UTINYINT:
-        case CalpontSystemCatalog::USMALLINT:
-        case CalpontSystemCatalog::UMEDINT:
-        case CalpontSystemCatalog::UINT:
-        case CalpontSystemCatalog::UBIGINT:
-          switch (out->getColTypes()[i])
-          {
-            case CalpontSystemCatalog::TINYINT:
-            case CalpontSystemCatalog::SMALLINT:
-            case CalpontSystemCatalog::MEDINT:
-            case CalpontSystemCatalog::INT:
-            case CalpontSystemCatalog::BIGINT:
-            {
-              if (out->getScale(i))
-              {
-                if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                  result.emplace_back(normalizeUintToIntWithScaleInt128);
-                else
-                  result.emplace_back(normalizeUntToIntWithScaleUint64);
-              } 
-              else
-                result.emplace_back(normalizeUintToIntNoScale); 
-              break;
-            }
+        // case CalpontSystemCatalog::UTINYINT:
+        // case CalpontSystemCatalog::USMALLINT:
+        // case CalpontSystemCatalog::UMEDINT:
+        // case CalpontSystemCatalog::UINT:
+        // case CalpontSystemCatalog::UBIGINT:
+        //   switch (out->getColTypes()[i])
+        //   {
+        //     case CalpontSystemCatalog::TINYINT:
+        //     case CalpontSystemCatalog::SMALLINT:
+        //     case CalpontSystemCatalog::MEDINT:
+        //     case CalpontSystemCatalog::INT:
+        //     case CalpontSystemCatalog::BIGINT:
+        //     {
+        //       if (out->getScale(i))
+        //       {
+        //         if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+        //           result.emplace_back(normalizeUintToIntWithScaleInt128);
+        //         else
+        //           result.emplace_back(normalizeUntToIntWithScaleUint64);
+        //       } 
+        //       else
+        //         result.emplace_back(normalizeUintToIntNoScale); 
+        //       break;
+        //     }
 
-            case CalpontSystemCatalog::UTINYINT:
-            case CalpontSystemCatalog::USMALLINT:
-            case CalpontSystemCatalog::UMEDINT:
-            case CalpontSystemCatalog::UINT:
-            case CalpontSystemCatalog::UBIGINT: result.emplace_back(normalizeUintToUint); break;
+        //     case CalpontSystemCatalog::UTINYINT:
+        //     case CalpontSystemCatalog::USMALLINT:
+        //     case CalpontSystemCatalog::UMEDINT:
+        //     case CalpontSystemCatalog::UINT:
+        //     case CalpontSystemCatalog::UBIGINT: result.emplace_back(normalizeUintToUint); break;
 
-            case CalpontSystemCatalog::CHAR:
-            case CalpontSystemCatalog::TEXT:
-            case CalpontSystemCatalog::VARCHAR: 
-            {
-              if (in.getScale(i))
-                result.emplace_back(normalizeUintToStringWithScale);
-              else
-                result.emplace_back(normalizeUintToStringNoScale);
-              break;
-            }
+        //     case CalpontSystemCatalog::CHAR:
+        //     case CalpontSystemCatalog::TEXT:
+        //     case CalpontSystemCatalog::VARCHAR: 
+        //     {
+        //       if (in.getScale(i))
+        //         result.emplace_back(normalizeUintToStringWithScale);
+        //       else
+        //         result.emplace_back(normalizeUintToStringNoScale);
+        //       break;
+        //     }
             
-            case CalpontSystemCatalog::DATE:
-            case CalpontSystemCatalog::DATETIME:
-            case CalpontSystemCatalog::TIME:
-            case CalpontSystemCatalog::TIMESTAMP:
-              throw logic_error(
-                  "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
+        //     case CalpontSystemCatalog::DATE:
+        //     case CalpontSystemCatalog::DATETIME:
+        //     case CalpontSystemCatalog::TIME:
+        //     case CalpontSystemCatalog::TIMESTAMP:
+        //       throw logic_error(
+        //           "TupleUnion::normalize(): tried to normalize an int to a timestamp, time, date or datetime");
 
-            case CalpontSystemCatalog::FLOAT:
-            case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizUintToXFloat); break;
+        //     case CalpontSystemCatalog::FLOAT:
+        //     case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizUintToXFloat); break;
 
-            case CalpontSystemCatalog::DOUBLE:
-            case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeUintToXDouble); break;
+        //     case CalpontSystemCatalog::DOUBLE:
+        //     case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeUintToXDouble); break;
 
-            case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeUintToLongDouble); break;
+        //     case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeUintToLongDouble); break;
 
-            case CalpontSystemCatalog::DECIMAL:
-            case CalpontSystemCatalog::UDECIMAL:
-            {
-              /*
-                Unsigned INT to XDecimal
-                TODO:
-                - The overflow problem mentioned in the code under case "Signed INT to XDecimal:" is
-                  also applicable here.
-              */
+        //     case CalpontSystemCatalog::DECIMAL:
+        //     case CalpontSystemCatalog::UDECIMAL:
+        //     {
+        //       /*
+        //         Unsigned INT to XDecimal
+        //         TODO:
+        //         - The overflow problem mentioned in the code under case "Signed INT to XDecimal:" is
+        //           also applicable here.
+        //       */
 
-              if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                result.emplace_back(normalizeUintToXDecimalWithScaleInt128);
-              else
-                result.emplace_back(normalizeUintToXDecimalWithScalUint64);
-              break;
-            }
+        //       if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+        //         result.emplace_back(normalizeUintToXDecimalWithScaleInt128);
+        //       else
+        //         result.emplace_back(normalizeUintToXDecimalWithScalUint64);
+        //       break;
+        //     }
 
-            default:
-              ostringstream os;
-              os << "TupleUnion::normalize(): tried an illegal conversion: integer to "
-                << out->getColTypes()[i];
-              throw logic_error(os.str());
-          }
+        //     default:
+        //       ostringstream os;
+        //       os << "TupleUnion::normalize(): tried an illegal conversion: integer to "
+        //         << out->getColTypes()[i];
+        //       throw logic_error(os.str());
+        //   }
 
-          break;
+        //   break;
 
-        case CalpontSystemCatalog::CHAR:
-        case CalpontSystemCatalog::TEXT:
-        case CalpontSystemCatalog::VARCHAR:
-          switch (out->getColTypes()[i])
-          {
-            case CalpontSystemCatalog::CHAR:
-            case CalpontSystemCatalog::TEXT:
-            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeStringToString); break;
+        // case CalpontSystemCatalog::CHAR:
+        // case CalpontSystemCatalog::TEXT:
+        // case CalpontSystemCatalog::VARCHAR:
+        //   switch (out->getColTypes()[i])
+        //   {
+        //     case CalpontSystemCatalog::CHAR:
+        //     case CalpontSystemCatalog::TEXT:
+        //     case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeStringToString); break;
 
-            default:
-            {
-              ostringstream os;
-              os << "TupleUnion::normalize(): tried an illegal conversion: string to " << out->getColTypes()[i];
-              throw logic_error(os.str());
-            }
-          }
+        //     default:
+        //     {
+        //       ostringstream os;
+        //       os << "TupleUnion::normalize(): tried an illegal conversion: string to " << out->getColTypes()[i];
+        //       throw logic_error(os.str());
+        //     }
+        //   }
 
-          break;
+        //   break;
 
-        case CalpontSystemCatalog::DATE:
-          switch (out->getColTypes()[i])
-          {
-            case CalpontSystemCatalog::DATE: result.emplace_back(normalizeDateToDate); break;
+        // case CalpontSystemCatalog::DATE:
+        //   switch (out->getColTypes()[i])
+        //   {
+        //     case CalpontSystemCatalog::DATE: result.emplace_back(normalizeDateToDate); break;
 
-            case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeDateToDatetime); break;
+        //     case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeDateToDatetime); break;
 
-            case CalpontSystemCatalog::TIMESTAMP: 
-            {
-              dataconvert::Date date(in.getUintField(i));
-              dataconvert::MySQLTime m_time;
-              m_time.year = date.year;
-              m_time.month = date.month;
-              m_time.day = date.day;
-              m_time.hour = 0;
-              m_time.minute = 0;
-              m_time.second = 0;
-              m_time.second_part = 0;
+        //     case CalpontSystemCatalog::TIMESTAMP: 
+        //     {
+        //       dataconvert::Date date(in.getUintField(i));
+        //       dataconvert::MySQLTime m_time;
+        //       m_time.year = date.year;
+        //       m_time.month = date.month;
+        //       m_time.day = date.day;
+        //       m_time.hour = 0;
+        //       m_time.minute = 0;
+        //       m_time.second = 0;
+        //       m_time.second_part = 0;
 
-              dataconvert::TimeStamp timeStamp;
-              bool isValid = true;
-              int64_t seconds = dataconvert::mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
+        //       dataconvert::TimeStamp timeStamp;
+        //       bool isValid = true;
+        //       int64_t seconds = dataconvert::mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
 
-              if (!isValid)
-                result.emplace_back(normalizeDateToTimestampInvalid);
-              else 
-                result.emplace_back(std::bind(normalizeDateToTimestampValid, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, seconds, m_time.second_part));
-              break;
-            }
+        //       if (!isValid)
+        //         result.emplace_back(normalizeDateToTimestampInvalid);
+        //       else 
+        //         result.emplace_back(std::bind(normalizeDateToTimestampValid, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, seconds, m_time.second_part));
+        //       break;
+        //     }
             
-            case CalpontSystemCatalog::CHAR:
-            case CalpontSystemCatalog::TEXT:
-            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeDateToString); break;
+        //     case CalpontSystemCatalog::CHAR:
+        //     case CalpontSystemCatalog::TEXT:
+        //     case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeDateToString); break;
 
-            default:
-            {
-              ostringstream os;
-              os << "TupleUnion::normalize(): tried an illegal conversion: date to " << out->getColTypes()[i];
-              throw logic_error(os.str());
-            }
-          }
+        //     default:
+        //     {
+        //       ostringstream os;
+        //       os << "TupleUnion::normalize(): tried an illegal conversion: date to " << out->getColTypes()[i];
+        //       throw logic_error(os.str());
+        //     }
+        //   }
 
-          break;
+        //   break;
 
-        case CalpontSystemCatalog::DATETIME:
-          switch (out->getColTypes()[i])
-          {
-            case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeDatetimeToDatetime); break;
+        // case CalpontSystemCatalog::DATETIME:
+        //   switch (out->getColTypes()[i])
+        //   {
+        //     case CalpontSystemCatalog::DATETIME: result.emplace_back(normalizeDatetimeToDatetime); break;
 
-            case CalpontSystemCatalog::DATE: result.emplace_back(normalizeDatetimeToDate); break;
+        //     case CalpontSystemCatalog::DATE: result.emplace_back(normalizeDatetimeToDate); break;
 
-            case CalpontSystemCatalog::TIMESTAMP: 
-            {
-              uint64_t val = in.getUintField(i);
-              dataconvert::DateTime dtime(val);
-              dataconvert::MySQLTime m_time;
-              dataconvert::TimeStamp timeStamp;
+        //     case CalpontSystemCatalog::TIMESTAMP: 
+        //     {
+        //       uint64_t val = in.getUintField(i);
+        //       dataconvert::DateTime dtime(val);
+        //       dataconvert::MySQLTime m_time;
+        //       dataconvert::TimeStamp timeStamp;
 
-              m_time.year = dtime.year;
-              m_time.month = dtime.month;
-              m_time.day = dtime.day;
-              m_time.hour = dtime.hour;
-              m_time.minute = dtime.minute;
-              m_time.second = dtime.second;
-              m_time.second_part = dtime.msecond;
+        //       m_time.year = dtime.year;
+        //       m_time.month = dtime.month;
+        //       m_time.day = dtime.day;
+        //       m_time.hour = dtime.hour;
+        //       m_time.minute = dtime.minute;
+        //       m_time.second = dtime.second;
+        //       m_time.second_part = dtime.msecond;
 
-              bool isValid = true;
-              int64_t seconds = mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
+        //       bool isValid = true;
+        //       int64_t seconds = mySQLTimeToGmtSec(m_time, fTimeZone, isValid);
 
-              if (!isValid)
-                result.emplace_back(normalizeDatetimeToTimestampInvalid);
-              else 
-                result.emplace_back(std::bind(normalizeDatetimeToTimestampValid, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, seconds, m_time.second_part));
-              break;
-            }
+        //       if (!isValid)
+        //         result.emplace_back(normalizeDatetimeToTimestampInvalid);
+        //       else 
+        //         result.emplace_back(std::bind(normalizeDatetimeToTimestampValid, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, seconds, m_time.second_part));
+        //       break;
+        //     }
 
-            case CalpontSystemCatalog::CHAR:
-            case CalpontSystemCatalog::TEXT:
-            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeDatetimeToString); break;
+        //     case CalpontSystemCatalog::CHAR:
+        //     case CalpontSystemCatalog::TEXT:
+        //     case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeDatetimeToString); break;
 
-            default:
-            {
-              ostringstream os;
-              os << "TupleUnion::normalize(): tried an illegal conversion: datetime to "
-                << out->getColTypes()[i];
-              throw logic_error(os.str());
-            }
-          }
+        //     default:
+        //     {
+        //       ostringstream os;
+        //       os << "TupleUnion::normalize(): tried an illegal conversion: datetime to "
+        //         << out->getColTypes()[i];
+        //       throw logic_error(os.str());
+        //     }
+        //   }
 
-          break;
+        //   break;
 
-        case CalpontSystemCatalog::TIMESTAMP:
-          switch (out->getColTypes()[i])
-          {
-            case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeTimestampToTimestamp); break;
+        // case CalpontSystemCatalog::TIMESTAMP:
+        //   switch (out->getColTypes()[i])
+        //   {
+        //     case CalpontSystemCatalog::TIMESTAMP: result.emplace_back(normalizeTimestampToTimestamp); break;
 
-            case CalpontSystemCatalog::DATE: result.emplace_back(std::bind(normalizeTimestampToDate, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, fTimeZone)); break;
+        //     case CalpontSystemCatalog::DATE: result.emplace_back(std::bind(normalizeTimestampToDate, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, fTimeZone)); break;
           
-            case CalpontSystemCatalog::DATETIME: result.emplace_back(std::bind(normalizeTimestampToDatetime, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, fTimeZone)); break;
+        //     case CalpontSystemCatalog::DATETIME: result.emplace_back(std::bind(normalizeTimestampToDatetime, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, fTimeZone)); break;
             
-            case CalpontSystemCatalog::CHAR:
-            case CalpontSystemCatalog::TEXT:
-            case CalpontSystemCatalog::VARCHAR: result.emplace_back(std::bind(normalizeTimestampToString, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, fTimeZone)); break;
+        //     case CalpontSystemCatalog::CHAR:
+        //     case CalpontSystemCatalog::TEXT:
+        //     case CalpontSystemCatalog::VARCHAR: result.emplace_back(std::bind(normalizeTimestampToString, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3, fTimeZone)); break;
 
-            default:
-            {
-              ostringstream os;
-              os << "TupleUnion::normalize(): tried an illegal conversion: timestamp to "
-                << out->getColTypes()[i];
-              throw logic_error(os.str());
-            }
-          }
+        //     default:
+        //     {
+        //       ostringstream os;
+        //       os << "TupleUnion::normalize(): tried an illegal conversion: timestamp to "
+        //         << out->getColTypes()[i];
+        //       throw logic_error(os.str());
+        //     }
+        //   }
 
-          break;
+        //   break;
 
-        case CalpontSystemCatalog::TIME:
-          switch (out->getColTypes()[i])
-          {
-            case CalpontSystemCatalog::TIME: result.emplace_back(normalizeTimeToTime); break;
+        // case CalpontSystemCatalog::TIME:
+        //   switch (out->getColTypes()[i])
+        //   {
+        //     case CalpontSystemCatalog::TIME: result.emplace_back(normalizeTimeToTime); break;
 
-            case CalpontSystemCatalog::CHAR:
-            case CalpontSystemCatalog::TEXT:
-            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeTimeToString); break;
+        //     case CalpontSystemCatalog::CHAR:
+        //     case CalpontSystemCatalog::TEXT:
+        //     case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeTimeToString); break;
 
-            default:
-            {
-              ostringstream os;
-              os << "TupleUnion::normalize(): tried an illegal conversion: time to " << out->getColTypes()[i];
-              throw logic_error(os.str());
-            }
-          }
+        //     default:
+        //     {
+        //       ostringstream os;
+        //       os << "TupleUnion::normalize(): tried an illegal conversion: time to " << out->getColTypes()[i];
+        //       throw logic_error(os.str());
+        //     }
+        //   }
 
-          break;
+        //   break;
 
-          case CalpontSystemCatalog::FLOAT:
-          case CalpontSystemCatalog::UFLOAT:
-          case CalpontSystemCatalog::DOUBLE:
-          case CalpontSystemCatalog::UDOUBLE:
-          {
-            switch (out->getColTypes()[i])
-            {
-              case CalpontSystemCatalog::TINYINT:
-              case CalpontSystemCatalog::SMALLINT:
-              case CalpontSystemCatalog::MEDINT:
-              case CalpontSystemCatalog::INT:
-              case CalpontSystemCatalog::BIGINT:
-              {
-                if (out->getScale(i))
-                {
-                  if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                  {
-                    if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
-                      result.emplace_back(normalizeXFloatToIntWithScaleInt128);
-                    else
-                      result.emplace_back(normalizeXDoubleToIntWithScaleInt128);
-                  }
-                  else
-                  {
-                    if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
-                      result.emplace_back(normalizeXFloatToIntWithScaleInt64);
-                    else
-                      result.emplace_back(normalizeXDoubleToIntWithScaleInt64);
-                  }
-                } 
-                else
-                {
-                  if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
-                    result.emplace_back(normalizeXFloatToIntNoScale);
-                  else
-                    result.emplace_back(normalizeXDoubleToIntNoScale);
-                }
-                break;
-              }
+        //   case CalpontSystemCatalog::FLOAT:
+        //   case CalpontSystemCatalog::UFLOAT:
+        //   case CalpontSystemCatalog::DOUBLE:
+        //   case CalpontSystemCatalog::UDOUBLE:
+        //   {
+        //     switch (out->getColTypes()[i])
+        //     {
+        //       case CalpontSystemCatalog::TINYINT:
+        //       case CalpontSystemCatalog::SMALLINT:
+        //       case CalpontSystemCatalog::MEDINT:
+        //       case CalpontSystemCatalog::INT:
+        //       case CalpontSystemCatalog::BIGINT:
+        //       {
+        //         if (out->getScale(i))
+        //         {
+        //           if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+        //           {
+        //             if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
+        //               result.emplace_back(normalizeXFloatToIntWithScaleInt128);
+        //             else
+        //               result.emplace_back(normalizeXDoubleToIntWithScaleInt128);
+        //           }
+        //           else
+        //           {
+        //             if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
+        //               result.emplace_back(normalizeXFloatToIntWithScaleInt64);
+        //             else
+        //               result.emplace_back(normalizeXDoubleToIntWithScaleInt64);
+        //           }
+        //         } 
+        //         else
+        //         {
+        //           if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
+        //             result.emplace_back(normalizeXFloatToIntNoScale);
+        //           else
+        //             result.emplace_back(normalizeXDoubleToIntNoScale);
+        //         }
+        //         break;
+        //       }
 
-            case CalpontSystemCatalog::UTINYINT:
-            case CalpontSystemCatalog::USMALLINT:
-            case CalpontSystemCatalog::UMEDINT:
-            case CalpontSystemCatalog::UINT:
-            case CalpontSystemCatalog::UBIGINT: 
-            {
-              if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
-                result.emplace_back(normalizeXFloatToUint);
-              else
-                result.emplace_back(normalizeXDoubleToUint);
-              break;
-            }
+        //     case CalpontSystemCatalog::UTINYINT:
+        //     case CalpontSystemCatalog::USMALLINT:
+        //     case CalpontSystemCatalog::UMEDINT:
+        //     case CalpontSystemCatalog::UINT:
+        //     case CalpontSystemCatalog::UBIGINT: 
+        //     {
+        //       if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
+        //         result.emplace_back(normalizeXFloatToUint);
+        //       else
+        //         result.emplace_back(normalizeXDoubleToUint);
+        //       break;
+        //     }
 
-            case CalpontSystemCatalog::FLOAT:
-            case CalpontSystemCatalog::UFLOAT: 
-            {
-              if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
-                result.emplace_back(normalizeXFloatToXFloat);
-              else
-                result.emplace_back(normalizeXDoubleToXFloat);
-              break;
-            }
+        //     case CalpontSystemCatalog::FLOAT:
+        //     case CalpontSystemCatalog::UFLOAT: 
+        //     {
+        //       if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
+        //         result.emplace_back(normalizeXFloatToXFloat);
+        //       else
+        //         result.emplace_back(normalizeXDoubleToXFloat);
+        //       break;
+        //     }
             
-            case CalpontSystemCatalog::DOUBLE:
-            case CalpontSystemCatalog::UDOUBLE: 
-            {
-              if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
-                result.emplace_back(normalizeXFloatToXDouble);
-              else
-                result.emplace_back(normalizeXDoubleToXDouble);
-              break;
-            }
+        //     case CalpontSystemCatalog::DOUBLE:
+        //     case CalpontSystemCatalog::UDOUBLE: 
+        //     {
+        //       if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
+        //         result.emplace_back(normalizeXFloatToXDouble);
+        //       else
+        //         result.emplace_back(normalizeXDoubleToXDouble);
+        //       break;
+        //     }
             
-            case CalpontSystemCatalog::LONGDOUBLE: 
-            {
-              if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
-                result.emplace_back(normalizeXFloatToLongDouble);
-              else
-                result.emplace_back(normalizeXDoubleToLongDouble);
-              break;
-            }
+        //     case CalpontSystemCatalog::LONGDOUBLE: 
+        //     {
+        //       if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
+        //         result.emplace_back(normalizeXFloatToLongDouble);
+        //       else
+        //         result.emplace_back(normalizeXDoubleToLongDouble);
+        //       break;
+        //     }
             
-            case CalpontSystemCatalog::CHAR:
-            case CalpontSystemCatalog::TEXT:
-            case CalpontSystemCatalog::VARCHAR: 
-            {
-              if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
-                result.emplace_back(normalizeXFloatToString);
-              else
-                result.emplace_back(normalizeXDoubleToString);
-              break;
-            }            
+        //     case CalpontSystemCatalog::CHAR:
+        //     case CalpontSystemCatalog::TEXT:
+        //     case CalpontSystemCatalog::VARCHAR: 
+        //     {
+        //       if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
+        //         result.emplace_back(normalizeXFloatToString);
+        //       else
+        //         result.emplace_back(normalizeXDoubleToString);
+        //       break;
+        //     }            
                         
-            case CalpontSystemCatalog::DECIMAL:
-            case CalpontSystemCatalog::UDECIMAL:
-            {
-              // xFLOAT or xDOUBLE to xDECIMAL conversion. Is it really possible?
-              // TODO:
-              // Perhaps we should add an assert here that this combination is not possible
-              // In the current reduction all problems mentioned in the code under
-              //  case "Signed INT to XDecimal" are also applicable here.
-              // TODO: isn't overflow possible below?
-              if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-              {
-                if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
-                  result.emplace_back(normalizeXFloatToWideXDecimal);
-                else
-                  result.emplace_back(normalizeXDoubleToWideXDecimal);
-                break;
-              }
-              else              
-              {
-                if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
-                  result.emplace_back(normalizeXFloatToXDecimal);
-                else
-                  result.emplace_back(normalizeXDoubleToXDecimal);
-                break;
-              }              
-              break;
-            }
+        //     case CalpontSystemCatalog::DECIMAL:
+        //     case CalpontSystemCatalog::UDECIMAL:
+        //     {
+        //       // xFLOAT or xDOUBLE to xDECIMAL conversion. Is it really possible?
+        //       // TODO:
+        //       // Perhaps we should add an assert here that this combination is not possible
+        //       // In the current reduction all problems mentioned in the code under
+        //       //  case "Signed INT to XDecimal" are also applicable here.
+        //       // TODO: isn't overflow possible below?
+        //       if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+        //       {
+        //         if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
+        //           result.emplace_back(normalizeXFloatToWideXDecimal);
+        //         else
+        //           result.emplace_back(normalizeXDoubleToWideXDecimal);
+        //         break;
+        //       }
+        //       else              
+        //       {
+        //         if (in.getColTypes()[i] == CalpontSystemCatalog::FLOAT)
+        //           result.emplace_back(normalizeXFloatToXDecimal);
+        //         else
+        //           result.emplace_back(normalizeXDoubleToXDecimal);
+        //         break;
+        //       }              
+        //       break;
+        //     }
 
-            default:
-              ostringstream os;
-              os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
-                << out->getColTypes()[i];
-              throw logic_error(os.str());
-          }
+        //     default:
+        //       ostringstream os;
+        //       os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
+        //         << out->getColTypes()[i];
+        //       throw logic_error(os.str());
+        //   }
 
-          break;
-        }
+        //   break;
+        // }
 
-        case CalpontSystemCatalog::LONGDOUBLE:
-        {
-          switch (out->getColTypes()[i])
-          {
-            case CalpontSystemCatalog::TINYINT:
-            case CalpontSystemCatalog::SMALLINT:
-            case CalpontSystemCatalog::MEDINT:
-            case CalpontSystemCatalog::INT:
-            case CalpontSystemCatalog::BIGINT:
-            {
-              if (out->getScale(i))
-              {
-                if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                  result.emplace_back(normalizeLongDoubleToIntWithScaleInt128);
-                else
-                  result.emplace_back(normalizeLongDoubleToIntWithScaleInt);
-              } 
-              else
-                result.emplace_back(normalizeLongDoubleToIntNoScale); 
-              break;
-            }
+        // case CalpontSystemCatalog::LONGDOUBLE:
+        // {
+        //   switch (out->getColTypes()[i])
+        //   {
+        //     case CalpontSystemCatalog::TINYINT:
+        //     case CalpontSystemCatalog::SMALLINT:
+        //     case CalpontSystemCatalog::MEDINT:
+        //     case CalpontSystemCatalog::INT:
+        //     case CalpontSystemCatalog::BIGINT:
+        //     {
+        //       if (out->getScale(i))
+        //       {
+        //         if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+        //           result.emplace_back(normalizeLongDoubleToIntWithScaleInt128);
+        //         else
+        //           result.emplace_back(normalizeLongDoubleToIntWithScaleInt);
+        //       } 
+        //       else
+        //         result.emplace_back(normalizeLongDoubleToIntNoScale); 
+        //       break;
+        //     }
 
-            case CalpontSystemCatalog::UTINYINT:
-            case CalpontSystemCatalog::USMALLINT:
-            case CalpontSystemCatalog::UMEDINT:
-            case CalpontSystemCatalog::UINT:
-            case CalpontSystemCatalog::UBIGINT: result.emplace_back(normalizeLongDoubleToUint); break;
+        //     case CalpontSystemCatalog::UTINYINT:
+        //     case CalpontSystemCatalog::USMALLINT:
+        //     case CalpontSystemCatalog::UMEDINT:
+        //     case CalpontSystemCatalog::UINT:
+        //     case CalpontSystemCatalog::UBIGINT: result.emplace_back(normalizeLongDoubleToUint); break;
 
-            case CalpontSystemCatalog::FLOAT:
-            case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeLongDoubleToXFloat); break;
+        //     case CalpontSystemCatalog::FLOAT:
+        //     case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeLongDoubleToXFloat); break;
 
-            case CalpontSystemCatalog::DOUBLE:
-            case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeLongDoubleToXDouble); break;
+        //     case CalpontSystemCatalog::DOUBLE:
+        //     case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeLongDoubleToXDouble); break;
 
-            case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeLongDoubleToLongDouble); break;
+        //     case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeLongDoubleToLongDouble); break;
 
-            case CalpontSystemCatalog::CHAR:
-            case CalpontSystemCatalog::TEXT:
-            case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeLongDoubleToString); break;
+        //     case CalpontSystemCatalog::CHAR:
+        //     case CalpontSystemCatalog::TEXT:
+        //     case CalpontSystemCatalog::VARCHAR: result.emplace_back(normalizeLongDoubleToString); break;
 
-            case CalpontSystemCatalog::DECIMAL:
-            case CalpontSystemCatalog::UDECIMAL:
-            {
-              // LONGDOUBLE to xDECIMAL conversions: is it really possible?
-              // TODO:
-              // Perhaps we should add an assert here that this combination is not possible
-              // In the current reduction all problems mentioned in the code under
-              //  case "Signed INT to XDecimal" are also applicable here.
-              if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                result.emplace_back(normalizeLongDoubleToXDecimalWithScaleInt128);
-              else
-                result.emplace_back(normalizeLongDoubleToXDecimalWithScaleInt);
+        //     case CalpontSystemCatalog::DECIMAL:
+        //     case CalpontSystemCatalog::UDECIMAL:
+        //     {
+        //       // LONGDOUBLE to xDECIMAL conversions: is it really possible?
+        //       // TODO:
+        //       // Perhaps we should add an assert here that this combination is not possible
+        //       // In the current reduction all problems mentioned in the code under
+        //       //  case "Signed INT to XDecimal" are also applicable here.
+        //       if (out->getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+        //         result.emplace_back(normalizeLongDoubleToXDecimalWithScaleInt128);
+        //       else
+        //         result.emplace_back(normalizeLongDoubleToXDecimalWithScaleInt);
               
-              break;
-            }
+        //       break;
+        //     }
 
-            default:
-              ostringstream os;
-              os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
-                << out->getColTypes()[i];
-              throw logic_error(os.str());
-          }
+        //     default:
+        //       ostringstream os;
+        //       os << "TupleUnion::normalize(): tried an illegal conversion: floating point to "
+        //         << out->getColTypes()[i];
+        //       throw logic_error(os.str());
+        //   }
 
-          break;
-        }
+        //   break;
+        // }
 
-        case CalpontSystemCatalog::DECIMAL:
-        case CalpontSystemCatalog::UDECIMAL:
-        {
-          switch (out->getColTypes()[i])
-          {
-            case CalpontSystemCatalog::TINYINT:
-            case CalpontSystemCatalog::SMALLINT:
-            case CalpontSystemCatalog::MEDINT:
-            case CalpontSystemCatalog::INT:
-            case CalpontSystemCatalog::BIGINT:
-            case CalpontSystemCatalog::UTINYINT:
-            case CalpontSystemCatalog::USMALLINT:
-            case CalpontSystemCatalog::UMEDINT:
-            case CalpontSystemCatalog::UINT:
-            case CalpontSystemCatalog::UBIGINT:
-            case CalpontSystemCatalog::DECIMAL:
-            case CalpontSystemCatalog::UDECIMAL:
-            {
-              if (datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)))
-              {
-                if (out->getScale(i) == in.getScale(i))
-                {
-                  if (in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                    result.emplace_back(normalizeWideXDecimalToWideXDecimalNoScale);
-                  else
-                    result.emplace_back(normalizeXDecimalToWideXDecimalNoScale);
-                }
-                else if (out->getScale(i) > in.getScale(i))
-                {
-                  if (in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
-                    result.emplace_back(normalizeWideXDecimalToWideXDecimalWithScale);
-                  else
-                    result.emplace_back(normalizeXDecimalToWideXDecimalWithScale);
-                }
-                else  // should not happen, the output's scale is the largest
-                  throw logic_error("TupleUnion::normalize(): incorrect scale setting");
-              }
-              // If output type is narrow decimal, input type
-              // has to be narrow decimal as well.
-              else
-              {
-                if (out->getScale(i) == in.getScale(i))
-                  result.emplace_back(normalizeXDecimalToOtherNoScale);
-                else if (out->getScale(i) > in.getScale(i))
-                  result.emplace_back(normalizeXDecimalToOtherWithScale);
-                else  // should not happen, the output's scale is the largest
-                  throw logic_error("TupleUnion::normalize(): incorrect scale setting");
-              }
+        // case CalpontSystemCatalog::DECIMAL:
+        // case CalpontSystemCatalog::UDECIMAL:
+        // {
+        //   switch (out->getColTypes()[i])
+        //   {
+        //     case CalpontSystemCatalog::TINYINT:
+        //     case CalpontSystemCatalog::SMALLINT:
+        //     case CalpontSystemCatalog::MEDINT:
+        //     case CalpontSystemCatalog::INT:
+        //     case CalpontSystemCatalog::BIGINT:
+        //     case CalpontSystemCatalog::UTINYINT:
+        //     case CalpontSystemCatalog::USMALLINT:
+        //     case CalpontSystemCatalog::UMEDINT:
+        //     case CalpontSystemCatalog::UINT:
+        //     case CalpontSystemCatalog::UBIGINT:
+        //     case CalpontSystemCatalog::DECIMAL:
+        //     case CalpontSystemCatalog::UDECIMAL:
+        //     {
+        //       if (datatypes::isWideDecimalType(out->getColTypes()[i], out->getColumnWidth(i)))
+        //       {
+        //         if (out->getScale(i) == in.getScale(i))
+        //         {
+        //           if (in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+        //             result.emplace_back(normalizeWideXDecimalToWideXDecimalNoScale);
+        //           else
+        //             result.emplace_back(normalizeXDecimalToWideXDecimalNoScale);
+        //         }
+        //         else if (out->getScale(i) > in.getScale(i))
+        //         {
+        //           if (in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH)
+        //             result.emplace_back(normalizeWideXDecimalToWideXDecimalWithScale);
+        //           else
+        //             result.emplace_back(normalizeXDecimalToWideXDecimalWithScale);
+        //         }
+        //         else  // should not happen, the output's scale is the largest
+        //           throw logic_error("TupleUnion::normalize(): incorrect scale setting");
+        //       }
+        //       // If output type is narrow decimal, input type
+        //       // has to be narrow decimal as well.
+        //       else
+        //       {
+        //         if (out->getScale(i) == in.getScale(i))
+        //           result.emplace_back(normalizeXDecimalToOtherNoScale);
+        //         else if (out->getScale(i) > in.getScale(i))
+        //           result.emplace_back(normalizeXDecimalToOtherWithScale);
+        //         else  // should not happen, the output's scale is the largest
+        //           throw logic_error("TupleUnion::normalize(): incorrect scale setting");
+        //       }
 
-              break;
-            }
+        //       break;
+        //     }
 
-            case CalpontSystemCatalog::FLOAT:
-            case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeXDecimalToXFloat); break; 
+        //     case CalpontSystemCatalog::FLOAT:
+        //     case CalpontSystemCatalog::UFLOAT: result.emplace_back(normalizeXDecimalToXFloat); break; 
 
-            case CalpontSystemCatalog::DOUBLE:
-            case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeXDecimalToXDouble); break;
+        //     case CalpontSystemCatalog::DOUBLE:
+        //     case CalpontSystemCatalog::UDOUBLE: result.emplace_back(normalizeXDecimalToXDouble); break;
 
-            case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeXDecimalToLongDouble); break;
+        //     case CalpontSystemCatalog::LONGDOUBLE: result.emplace_back(normalizeXDecimalToLongDouble); break;
 
-            case CalpontSystemCatalog::CHAR:
-            case CalpontSystemCatalog::TEXT:
-            case CalpontSystemCatalog::VARCHAR:
-            default:
-            {
-              if (LIKELY(in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH))
-                result.emplace_back(normalizeWideXDecimalToString);
-              else
-                result.emplace_back(normalizeXDecimalToString);
-              break;
-            }
-          }
+        //     case CalpontSystemCatalog::CHAR:
+        //     case CalpontSystemCatalog::TEXT:
+        //     case CalpontSystemCatalog::VARCHAR:
+        //     default:
+        //     {
+        //       if (LIKELY(in.getColumnWidth(i) == datatypes::MAXDECIMALWIDTH))
+        //         result.emplace_back(normalizeWideXDecimalToString);
+        //       else
+        //         result.emplace_back(normalizeXDecimalToString);
+        //       break;
+        //     }
+        //   }
 
-          break;
-        }
+        //   break;
+        // }
 
-        case CalpontSystemCatalog::BLOB:
-        case CalpontSystemCatalog::VARBINARY: result.emplace_back(normalizeBlobVarbinary); break;
+        // case CalpontSystemCatalog::BLOB:
+        // case CalpontSystemCatalog::VARBINARY: result.emplace_back(normalizeBlobVarbinary); break;
 
         default:
         {
@@ -1508,9 +1530,9 @@ void TupleUnion::readInput(uint32_t which)
         l_tmpRG.getRow(0, &tmpRow);
         l_tmpRG.setRowCount(l_inputRG.getRowCount());
 
-        std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &tmpRow, fTimeZone);
-        for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow(), tmpRow.nextRow())
-          normalize(inRow, &tmpRow, normalizeFunctions);
+        // std::vector<std::function<void(Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &tmpRow, fTimeZone);
+        // for (uint32_t i = 0; i < l_inputRG.getRowCount(); i++, inRow.nextRow(), tmpRow.nextRow())
+        //   normalize(inRow, &tmpRow, normalizeFunctions);
 
         l_tmpRG.getRow(0, &tmpRow);
         {
@@ -1560,7 +1582,7 @@ void TupleUnion::readInput(uint32_t which)
       }
       else
       {
-        const std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>> normalizeFunctions = inferNormalizeFunctions(inRow, &outRow, fTimeZone);
+        const std::vector<std::pair<std::function<void(Row& in, Row* out, uint32_t col)>,std::function<void(Row& in, Row* out, uint32_t col)>>> normalizeFunctions = inferNormalizeFunctions(inRow, &outRow, fTimeZone);
         const uint32_t inputRGRowCount = l_inputRG.getRowCount();
         uint32_t tmpOutputRowCount = l_outputRG.getRowCount();
 
@@ -1572,20 +1594,22 @@ void TupleUnion::readInput(uint32_t which)
           /// COMMENT: Itertion all columns.
           for (; columnId < outRow.getColumnCount(); columnId++)
           {
+            const uint32_t stride = 128 / (8 * inRow.getColumnWidth(columnId));
             /// COMMENT: Itertion all elements in this current column.
-            for (; rowId < inputRGRowCount; rowId++, inRow.nextRow(inRow.getSize() * 1))
+            for (; rowId < inputRGRowCount - stride + 1; rowId += stride)
             {
-              const bool isTheLastRow = (rowId == inputRGRowCount - 1);
+              const bool isTheLastRow = (rowId + stride <= inputRGRowCount) && (rowId + stride + stride > inputRGRowCount);
               const bool isTheLastColumn = (columnId == outRow.getColumnCount() - 1);
               {
                 /// COMMENT: Normalize one element of this current column. No need to have an additional normalize function call.
                 if (inRow.isNullValue(columnId))
                   TupleUnion::writeNull(&outRow, columnId);
                 else
-                  normalizeFunctions[columnId](inRow, &outRow, columnId);
+                  normalizeFunctions[columnId].first(inRow, &outRow, columnId);
               }
 
               /// COMMENT: Add to output in a new vectorized way.
+              tmpOutputRowCount += stride;
               addToOutputVec(&outRow, &l_outputRG, false, outRGData, tmpOutputRowCount, isTheLastColumn);
 
               /// COMMENT: The buffer is written out in the addToOutputVec with tmpOutputRowCount set from BUFFER_SIZE to 0.
@@ -1604,8 +1628,8 @@ void TupleUnion::readInput(uint32_t which)
               if (UNLIKELY(tmpOutputRowCount == BUFFER_SIZE || (isTheLastRow && !isTheLastColumn)))
               {
                 gobackFlag = true;
-                rowId++;
-                inRow.nextRow(inRow.getSize() * 1);  // Make nextRow the same times function call on inRow and outRow.
+                rowId += stride;
+                // inRow.nextRow(inRow.getSize() * stride);  // Make nextRow the same times function call on inRow and outRow.
                 break;
               }
             }
@@ -1622,6 +1646,31 @@ void TupleUnion::readInput(uint32_t which)
               rowId = rowIdGoback;
             }
 
+          }
+
+
+          for (; rowId < inputRGRowCount; rowId++, inRow.nextRow())
+          {
+            {
+              uint32_t i;
+              outRow.setRid(0);
+              for (i = 0; i < outRow.getColumnCount(); i++)
+              {
+                if (inRow.isNullValue(i))
+                {
+                  TupleUnion::writeNull(&outRow, i);
+                  continue;
+                }
+                /// Call the pre-compiled function.
+                normalizeFunctions[i].second(inRow, &outRow, i);
+              }
+            }
+            // if (inRow.isNullValue(columnId))
+            //   TupleUnion::writeNull(&outRow, columnId);
+            // else
+            //   normalizeFunctions[columnId](inRow, &outRow, columnId);
+            outRow.nextRow();
+            tmpOutputRowCount++;
           }
         }
 
@@ -1762,8 +1811,8 @@ void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit, RGData& data, ui
 
 void TupleUnion::addToOutputVec(Row* outRow, RowGroup* outputRG, bool keepit, RGData& data, uint32_t& tmpOutputRowCount, bool isTheLastColumn)
 {
-  outRow->nextRow(outRow->getSize() * 1);
-  ++tmpOutputRowCount;
+  // outRow->nextRow(outRow->getSize() * 1);
+  // ++tmpOutputRowCount;
 
   /// COMMENT: Insert this batch to output, **only when** the last column is processed.
   ///          This case is called "bufferout". 
@@ -1785,24 +1834,24 @@ void TupleUnion::addToOutputVec(Row* outRow, RowGroup* outputRG, bool keepit, RG
   }
 }
 
-void TupleUnion::normalize(const Row& in, Row* out, std::vector<std::function<void(const Row& in, Row* out, uint32_t col)>>& normalizeFunctions)
-{
-  uint32_t i;
+// void TupleUnion::normalize(Row& in, Row* out, std::vector<std::function<void(Row& in, Row* out, uint32_t col)>>& normalizeFunctions)
+// {
+//   uint32_t i;
 
-  out->setRid(0);
+//   out->setRid(0);
 
-  for (i = 0; i < out->getColumnCount(); i++)
-  {
-    if (in.isNullValue(i))
-    {
-      TupleUnion::writeNull(out, i);
-      continue;
-    }
+//   for (i = 0; i < out->getColumnCount(); i++)
+//   {
+//     if (in.isNullValue(i))
+//     {
+//       TupleUnion::writeNull(out, i);
+//       continue;
+//     }
 
-    /// Call the pre-compiled function.
-    normalizeFunctions[i](in, out, i);
-  }
-}
+//     /// Call the pre-compiled function.
+//     normalizeFunctions[i](in, out, i);
+//   }
+// }
 
 void TupleUnion::run()
 {
