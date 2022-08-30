@@ -1573,7 +1573,7 @@ void TupleUnion::readInput(uint32_t which)
           for (; columnId < outRow.getColumnCount(); columnId++)
           {
             /// COMMENT: Itertion all elements in this current column.
-            for (; rowId < inputRGRowCount; rowId++, inRow.nextRow())
+            for (; rowId < inputRGRowCount; rowId++, inRow.nextRow(inRow.getSize() * 1))
             {
               const bool isTheLastRow = (rowId == inputRGRowCount - 1);
               const bool isTheLastColumn = (columnId == outRow.getColumnCount() - 1);
@@ -1605,7 +1605,7 @@ void TupleUnion::readInput(uint32_t which)
               {
                 gobackFlag = true;
                 rowId++;
-                inRow.nextRow();  // Make nextRow the same times function call on inRow and outRow.
+                inRow.nextRow(inRow.getSize() * 1);  // Make nextRow the same times function call on inRow and outRow.
                 break;
               }
             }
@@ -1762,7 +1762,7 @@ void TupleUnion::addToOutput(Row* r, RowGroup* rg, bool keepit, RGData& data, ui
 
 void TupleUnion::addToOutputVec(Row* outRow, RowGroup* outputRG, bool keepit, RGData& data, uint32_t& tmpOutputRowCount, bool isTheLastColumn)
 {
-  outRow->nextRow();
+  outRow->nextRow(outRow->getSize() * 1);
   ++tmpOutputRowCount;
 
   /// COMMENT: Insert this batch to output, **only when** the last column is processed.
