@@ -492,6 +492,7 @@ inline bool isUnsigned(const datatypes::SystemCatalog::ColDataType type)
 {
   if (isUnsignedInteger(type)) 
     return true;
+
   switch (type)
   {
     case datatypes::SystemCatalog::CHAR:
