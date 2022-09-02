@@ -21,6 +21,17 @@ SELECT * FROM (SELECT b FROM t1 UNION SELECT a FROM t1) tu ORDER BY b;
 DROP TABLE t1;
 
 --echo #
+--echo # Multiple Columns Union
+--echo #
+
+CREATE TABLE t1 (a INT, b INT, c INT);
+INSERT INTO t1 VALUES (-1, 1, 0), (-2, 2, 0), (-3, 3, 0), (-4, 4, 0), (-5, 5, 0), (-1, 1, 0), (-2, 2, 0), (-3, 3, 0), (-4, 4, 0), (-5, 5, 0);
+SELECT * FROM (SELECT * FROM t1 UNION ALL SELECT * FROM t1) tu ORDER BY b;
+SELECT * FROM (SELECT a FROM t1 UNION ALL SELECT b FROM t1) tu ORDER BY a;
+SELECT * FROM (SELECT b FROM t1 UNION ALL SELECT a FROM t1) tu ORDER BY b;
+DROP TABLE t1;
+
+--echo #
 --echo # Same Int Type Union
 --echo #
 

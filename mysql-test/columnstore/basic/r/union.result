@@ -25,6 +25,78 @@ b
 2
 DROP TABLE t1;
 #
+# Multiple Columns Union
+#
+CREATE TABLE t1 (a INT, b INT, c INT);
+INSERT INTO t1 VALUES (-1, 1, 0), (-2, 2, 0), (-3, 3, 0), (-4, 4, 0), (-5, 5, 0), (-1, 1, 0), (-2, 2, 0), (-3, 3, 0), (-4, 4, 0), (-5, 5, 0);
+SELECT * FROM (SELECT * FROM t1 UNION ALL SELECT * FROM t1) tu ORDER BY b;
+a	b	c
+-1	1	0
+-1	1	0
+-1	1	0
+-1	1	0
+-2	2	0
+-2	2	0
+-2	2	0
+-2	2	0
+-3	3	0
+-3	3	0
+-3	3	0
+-3	3	0
+-4	4	0
+-4	4	0
+-4	4	0
+-4	4	0
+-5	5	0
+-5	5	0
+-5	5	0
+-5	5	0
+SELECT * FROM (SELECT a FROM t1 UNION ALL SELECT b FROM t1) tu ORDER BY a;
+a
+-5
+-5
+-4
+-4
+-3
+-3
+-2
+-2
+-1
+-1
+1
+1
+2
+2
+3
+3
+4
+4
+5
+5
+SELECT * FROM (SELECT b FROM t1 UNION ALL SELECT a FROM t1) tu ORDER BY b;
+b
+-5
+-5
+-4
+-4
+-3
+-3
+-2
+-2
+-1
+-1
+1
+1
+2
+2
+3
+3
+4
+4
+5
+5
+DROP TABLE t1;
+#
 # Same Int Type Union
 #
 CREATE TABLE t1 (a INT UNSIGNED, b INT UNSIGNED);
