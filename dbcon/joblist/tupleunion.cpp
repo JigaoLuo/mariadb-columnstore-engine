@@ -68,7 +68,6 @@ namespace
 
   void normalizeIntToIntNoScaleVec(Row& in, Row* out, uint32_t i) 
   {
-    __m128i vec;
     std::array<int, 4> arr;
     for (uint32_t c = 0; c < 4 /*Magic Number Fix Later TODO:*/; c++) {
       arr[c] = in.getIntField(i); 
