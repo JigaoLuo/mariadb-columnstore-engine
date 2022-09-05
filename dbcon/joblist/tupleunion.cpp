@@ -1518,9 +1518,8 @@ void TupleUnion::readInput(uint32_t which)
           getOutput(&l_outputRG, &outRow, &outRGData);
           memUsageBefore = allocator.getMemUsage();
 
-          const uint32_t tmpRGRowCount = l_tmpRG.getRowCount();
           uint32_t tmpOutputRowCount = l_outputRG.getRowCount();
-          for (uint32_t i = 0; i < tmpRGRowCount; i++, tmpRow.nextRow())
+          for (uint32_t i = 0; i < l_tmpRG.getRowCount(); i++, tmpRow.nextRow())
           {
             pair<Uniquer_t::iterator, bool> inserted;
             inserted = uniquer->insert(RowPosition(which | RowPosition::normalizedFlag, i));
@@ -1529,13 +1528,13 @@ void TupleUnion::readInput(uint32_t which)
             {
               copyRow(tmpRow, &outRow);
               const_cast<RowPosition&>(*(inserted.first)) =
-                  RowPosition(rowMemory.size() - 1, l_outputRG.getRowCount());
+                  RowPosition(rowMemory.size() - 1, tmpOutputRowCount);
               memDiff += outRow.getRealSize();
               addToOutput(&outRow, &l_outputRG, true, outRGData, tmpOutputRowCount);
             }
           }
 
-          fRowsReturned += tmpRGRowCount;
+          fRowsReturned += (tmpOutputRowCount - l_outputRG.getRowCount());
           l_outputRG.setRowCount(tmpOutputRowCount);
 
           memUsageAfter = allocator.getMemUsage();
