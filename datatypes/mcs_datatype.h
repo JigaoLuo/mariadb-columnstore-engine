@@ -506,6 +506,76 @@ inline bool isSignedInteger(const datatypes::SystemCatalog::ColDataType type)
   }
 }
 
+inline bool isUnsignedInteger(const datatypes::SystemCatalog::ColDataType type)
+{
+  switch (type)
+  {
+    case datatypes::SystemCatalog::UTINYINT:
+    case datatypes::SystemCatalog::USMALLINT:
+    case datatypes::SystemCatalog::UMEDINT:
+    case datatypes::SystemCatalog::UINT:
+    case datatypes::SystemCatalog::UBIGINT: return true;
+
+    default: return false;
+  }
+}
+
+inline bool sameSignednessInteger(const datatypes::SystemCatalog::ColDataType type1, const datatypes::SystemCatalog::ColDataType type2)
+{
+  return (isSignedInteger(type1) && isSignedInteger(type2)) || (isUnsignedInteger(type1) && isUnsignedInteger(type2));
+}
+
+inline bool differentSignednessInteger(const datatypes::SystemCatalog::ColDataType type1, const datatypes::SystemCatalog::ColDataType type2)
+{
+  return (isSignedInteger(type1) && isUnsignedInteger(type2)) || (isUnsignedInteger(type1) && isSignedInteger(type2));
+}
+
+inline void promoteSignedInteger(datatypes::SystemCatalog::TypeHolderStd& unionedType)
+{
+  switch (unionedType.colDataType)
+  {
+    case datatypes::SystemCatalog::TINYINT:
+    case datatypes::SystemCatalog::UTINYINT:
+    {
+      unionedType.colDataType = datatypes::SystemCatalog::SMALLINT;
+      unionedType.colWidth = 2;
+      return;
+    }
+    case datatypes::SystemCatalog::SMALLINT:
+    case datatypes::SystemCatalog::USMALLINT:
+    {
+      unionedType.colDataType = datatypes::SystemCatalog::MEDINT;
+      unionedType.colWidth = 4;
+      return;
+    }
+    case datatypes::SystemCatalog::MEDINT:
+    case datatypes::SystemCatalog::UMEDINT:
+    {
+      unionedType.colDataType = datatypes::SystemCatalog::INT;
+      unionedType.colWidth = 4;
+      return;
+    }
+    case datatypes::SystemCatalog::INT:
+    case datatypes::SystemCatalog::UINT:
+    {
+      unionedType.colDataType = datatypes::SystemCatalog::BIGINT;
+      unionedType.colWidth = 8;
+      return;
+    }
+    case datatypes::SystemCatalog::BIGINT:
+    case datatypes::SystemCatalog::UBIGINT:
+    {
+      unionedType.colDataType = datatypes::SystemCatalog::DECIMAL;
+      unionedType.colWidth = MAXDECIMALWIDTH;
+      unionedType.precision = datatypes::INT128MAXPRECISION;
+      unionedType.scale = 0;
+      return;
+    } 
+
+    default: idbassert(0); throw std::logic_error("datatypes::upcastSignedInteger: bad data type");
+  }
+}
+
 /**
     @brief The method netects whether type sum and avg aggregate will have
     wide decimal underlying type

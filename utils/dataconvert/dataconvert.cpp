@@ -2984,21 +2984,26 @@ void DataConvert::joinColTypeForUnion(datatypes::SystemCatalog::TypeHolderStd& u
             break;
           }
 
-          if (type.colWidth > unionedType.colWidth)
+          if (type.colDataType == unionedType.colDataType)
           {
-            unionedType.colDataType = type.colDataType;
-            unionedType.colWidth = type.colWidth;
+            if (type.colWidth > unionedType.colWidth)
+              unionedType.colWidth = type.colWidth;
           }
-
-          // If same size but different signedness
-          if (type.colWidth == unionedType.colWidth &&
-              ((!isUnsigned(unionedType.colDataType) && isUnsigned(type.colDataType)) ||
-               (!isUnsigned(type.colDataType) && isUnsigned(unionedType.colDataType))))
+          else if (sameSignednessInteger(unionedType.colDataType, type.colDataType))
           {
-            unionedType.colDataType = datatypes::SystemCatalog::DECIMAL;
-            unionedType.colWidth = datatypes::Decimal::isWideDecimalTypeByPrecision(unionedType.precision)
-                                       ? datatypes::MAXDECIMALWIDTH
-                                       : datatypes::MAXLEGACYWIDTH;
+            // Keep the signedness on the larger data type.
+            if (type.colWidth > unionedType.colWidth)
+            {
+              unionedType.colDataType = type.colDataType;
+              unionedType.colWidth = type.colWidth;
+            }
+          }
+          else if (differentSignednessInteger(unionedType.colDataType, type.colDataType))
+          {
+            // unionedType must be signed integer with upcasted size to prevent overflow & underflow.
+            if (type.colWidth > unionedType.colWidth)
+              unionedType.colDataType = type.colDataType;
+            promoteSignedInteger(unionedType);
           }
 
           if (type.colDataType == datatypes::SystemCatalog::DECIMAL ||

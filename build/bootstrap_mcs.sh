@@ -340,15 +340,16 @@ socket=/run/mysqld/mysqld.sock" > /etc/my.cnf.d/socket.cnf'
 
 select_branch
 
-if [[ $SKIP_DEPS = false ]] ; then
-    install_deps
-fi
+# if [[ $SKIP_DEPS = false ]] ; then
+#     install_deps
+# fi
 
 stop_service
 clean_old_installation
 build
-run_unit_tests
-run_microbenchmarks_tests
+# run_unit_tests
+# run_microbenchmarks_tests
+install -dpm770 -o mysql -g mysql /var/run/mariadb
 install
-start_service
+    start_service
 message "$color_green FINISHED $color_normal"
